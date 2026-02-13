@@ -10,6 +10,7 @@ use tower::ServiceBuilder;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     trace::TraceLayer,
+    timeout::TimeoutLayer,
 };
 
 use relaykey_db::{init_db, init_redis};
@@ -18,6 +19,7 @@ use state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+    dotenvy::dotenv().ok();
     let settings = Settings::from_env()?;
     telemetry::init(&settings.log_filter);
 
@@ -39,24 +41,21 @@ async fn main() -> Result<(), String> {
         // tracing for requests
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(|req: &Request<_>| {
-                    let request_id = req
-                        .headers()
-                        .get("x-request-id")
-                        .and_then(|v| v.to_str().ok())
-                        .unwrap_or("-");
-                    tracing::info_span!(
-                        "http_request",
-                        method = %req.method(),
-                        uri = %req.uri(),
-                        request_id = %request_id
-                    )
-                })
-                .on_failure(|error, _latency, _span| {
-                    tracing::warn!(error = %error, "request failed");
-                }),
+            .make_span_with(|req: &Request<_>| {
+                let request_id = req
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("-");
+                tracing::info_span!(
+                    "http_request",
+                    method = %req.method(),
+                    uri = %req.uri(),
+                    request_id = %request_id
+                )
+            }),
         )
-        .timeout(Duration::from_secs(30));
+        .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
     let app = app::build_router(state).layer(middleware);
 

@@ -1,7 +1,7 @@
 [package]
 name = "relaykey-app"
 version = "0.1.0" 
-edition = 2021
+edition = "2021"
 
 [dependencies]
 relaykey-core = { path = "../relaykey-core" }
@@ -9,11 +9,14 @@ relaykey-db = { path = "../relaykey-db" }
 
 axum = "0.7"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
-tower = "0.5"
-tower-http = { version = "0.5", features = ["trace", "request-id"] }
+tower = { version = "0.5", features = ["timeout"] }
+tower-http = { version = "0.5", features = ["trace", "request-id", "timeout"] }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 uuid = { version = "1", features = ["v4"] }
 http = "1"
+redis = { version = "0.25.4", features = ["tokio-comp"] }
+sqlx = "0.8.6"
+dotenvy = "0.15"

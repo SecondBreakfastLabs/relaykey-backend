@@ -7,10 +7,9 @@ pub async fn health() -> impl IntoResponse {
     (StatusCode::OK, "ok")
 }
 
-// "ready" checks dependencies; keep it light.
 pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     // Postgres ping
-    if let Err(e) = sqlx::query_scalar::<_, i64>("SELECT 1")
+    if let Err(e) = sqlx::query_scalar::<_, i32>("SELECT 1")
         .fetch_one(&state.db)
         .await
     {
@@ -18,8 +17,18 @@ pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     }
 
     // Redis ping
-    if let Err(e) = redis::cmd("PING").query_async::<_, String>(&mut state.redis.clone()).await {
-        return (StatusCode::SERVICE_UNAVAILABLE, format!("redis not ready: {e}"));
+    {
+        let mut conn = state.redis.clone();
+        let pong: String = match redis::cmd("PING").query_async(&mut conn).await {
+            Ok(v) => v,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("redis not ready: {e}"),
+                )
+            }
+        };
+        let _ = pong;
     }
 
     (StatusCode::OK, "ready".to_string())
