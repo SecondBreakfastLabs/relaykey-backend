@@ -1,0 +1,41 @@
+flowchart LR
+  %% Clients
+  subgraph Clients
+    A[Service / App / CI] -->|X-RelayKey + request| G
+    B[External Consumer] -->|X-RelayKey + request| G
+  end
+
+  %% RelayKey
+  subgraph RelayKey[RelayKey Platform]
+    G[Gateway / Proxy API]
+
+    G --> M1[Auth: Virtual Key]
+    M1 --> M2[Policy Guard<br/>Allowlist / Env]
+    M2 --> M3[Rate Limit<br/>Redis Token Bucket]
+    M3 --> M4[Monthly Quota<br/>Redis Counter]
+    M4 -->|optional| M5[x402 Payment Check]
+    M5 --> S[Select Upstream Credential<br/>Binding Strategy]
+    S --> K[Fetch Secret<br/>Secrets Provider]
+    K --> F[Forward Request<br/>Retries + Circuit Breaker]
+    F --> E[Emit Usage Event<br/>Async]
+  end
+
+  %% Dependencies
+  DB[(Postgres<br/>config + audit)]
+  R[(Redis<br/>rate + quota)]
+  SM[(Secrets Manager<br/>AWS/Vault/etc.)]
+  UP[(Partner APIs)]
+
+  %% Connections
+  M1 --> DB
+  M2 --> DB
+  E --> DB
+  M3 --> R
+  M4 --> R
+  K --> SM
+  F --> UP
+
+  %% Optional analytics
+  CH[(ClickHouse<br/>optional analytics)]
+  E -. stream/ETL .-> CH
+  
