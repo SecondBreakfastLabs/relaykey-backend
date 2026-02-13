@@ -1,0 +1,12 @@
+[package]
+name = "relaykey-db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+relaykey-core = { path = "../relaykey-core" }
+
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "migrate", "uuid", "time"] }
+redis = { version = "0.25", features = ["tokio-comp"] }
+
+tracing = "0.1"
