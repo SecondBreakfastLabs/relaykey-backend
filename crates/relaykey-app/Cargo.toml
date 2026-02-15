@@ -20,6 +20,6 @@ http = "1"
 redis = { version = "0.25.4", features = ["tokio-comp"] }
 sqlx = "0.8.6"
 dotenvy = "0.15"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 bytes = "1"
 url = "2"

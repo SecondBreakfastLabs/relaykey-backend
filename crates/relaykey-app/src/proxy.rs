@@ -1,8 +1,8 @@
 use axum::{
-    body::Bytes,
+    body::{Body, Bytes},
     extract::{Path, State},
     http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use std::sync::Arc;
 use url::Url;
@@ -32,11 +32,12 @@ pub async fn proxy_handler(
     uri: Uri,
     headers: HeaderMap,
     body: Bytes,
-) -> impl IntoResponse {
+) -> Response {
     // Reject potentially dangerous methods that can enable tunneling or reflection.
     if method == Method::CONNECT || method == Method::TRACE {
         return StatusCode::METHOD_NOT_ALLOWED.into_response();
     }
+
     // 1) Load partner
     let partner_row = match get_partner_by_name(&state.db, &partner).await {
         Ok(Some(p)) => p,
@@ -44,7 +45,7 @@ pub async fn proxy_handler(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response(),
     };
 
-    // 2) Load credential (single for Phase 1)
+    // 2) Load credential (Phase 1: single header)
     let cred = match get_credential_for_partner(&state.db, partner_row.id).await {
         Ok(Some(c)) => c,
         Ok(None) => {
@@ -69,34 +70,26 @@ pub async fn proxy_handler(
         }
     };
 
-    // Reconstruct path+query from incoming URI:
-    let path_and_query = match uri.path_and_query() {
-        Some(pq) => pq.as_str(),
-        None => uri.path(),
-    };
-
-    // If someone tries to smuggle an absolute URL in the path, reject it.
-    // (Defense-in-depth; should already be safe with our join strategy.)
+    // Defense-in-depth: reject URL-looking tails explicitly.
     let tail_lc = tail.to_lowercase();
     if tail_lc.starts_with("http://") || tail_lc.starts_with("https://") {
         return (StatusCode::BAD_REQUEST, "blocked by SSRF guard").into_response();
     }
 
-    // Ensure request path starts with /proxy/{partner}/ and we forward only the tail
-    // We'll reconstruct as "/{tail}" and preserve query string from original uri.
+    // Forward only the captured tail; preserve query string.
     let forwarded_path = if tail.is_empty() {
         "/".to_string()
     } else {
         format!("/{}", tail)
     };
-
     let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
+
     let joined = match base.join(&(forwarded_path + &query)) {
         Ok(u) => u,
         Err(_) => return (StatusCode::BAD_REQUEST, "invalid upstream path").into_response(),
     };
 
-    // SSRF guard: enforce origin unchanged (host/scheme must match base)
+    // SSRF guard: enforce origin unchanged (host/scheme/port must match base)
     if joined.scheme() != base.scheme()
         || joined.host_str() != base.host_str()
         || joined.port_or_known_default() != base.port_or_known_default()
@@ -107,15 +100,22 @@ pub async fn proxy_handler(
     // 4) Build outgoing request
     let mut out = state.http.request(method, joined);
 
-    // Copy safe headers
+    // Copy safe headers (blocklist approach for Phase 1)
     for (name, value) in headers.iter() {
         let name_str = name.as_str().to_lowercase();
 
         // never forward these
-        if name_str == "host" || name_str == "x-relaykey" {
+        if name_str == "host" || name_str == "x-relaykey" || name_str == "x-request-id" {
             continue;
         }
+
+        // drop hop-by-hop headers
         if is_hop_by_hop(&name_str) {
+            continue;
+        }
+
+        // drop sensitive end-user / proxy headers
+        if name_str == "authorization" || name_str == "cookie" || name_str.starts_with("proxy-") {
             continue;
         }
 
@@ -133,6 +133,7 @@ pub async fn proxy_handler(
                 .into_response()
         }
     };
+
     let header_value = match HeaderValue::from_str(&cred.header_value) {
         Ok(v) => v,
         Err(_) => {
@@ -143,31 +144,36 @@ pub async fn proxy_handler(
                 .into_response()
         }
     };
+
     out = out.header(header_name, header_value);
 
-    // Set body
+    // Send upstream request
     let resp = match out.body(body).send().await {
         Ok(r) => r,
         Err(_) => return (StatusCode::BAD_GATEWAY, "upstream request failed").into_response(),
     };
 
-    // 5) Return upstream response (filter hop-by-hop headers)
+    // 5) Return upstream response (streaming; filter headers)
     let status = resp.status();
+
     let mut resp_headers = axum::http::HeaderMap::new();
     for (name, value) in resp.headers().iter() {
         let name_str = name.as_str().to_lowercase();
+
         if is_hop_by_hop(&name_str) {
             continue;
         }
+
+        // Don't leak upstream cookies to callers.
+        if name_str == "set-cookie" {
+            continue;
+        }
+
         resp_headers.insert(name, value.clone());
     }
 
-    let bytes = match resp.bytes().await {
-        Ok(b) => b,
-        Err(_) => {
-            return (StatusCode::BAD_GATEWAY, "failed to read upstream response").into_response()
-        }
-    };
+    // Stream upstream body to client (prevents buffering huge responses in memory).
+    let body = Body::from_stream(resp.bytes_stream());
 
-    (status, resp_headers, bytes).into_response()
+    (status, resp_headers, body).into_response()
 }
