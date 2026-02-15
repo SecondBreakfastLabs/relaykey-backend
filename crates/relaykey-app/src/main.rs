@@ -38,7 +38,11 @@ fn safe_host(database_url: &str) -> String {
 async fn main() -> Result<(), String> {
     dotenvy::dotenv().ok();
     let settings = Settings::from_env()?;
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("HTTP client init failed: {e}"))?;
     telemetry::init(&settings.log_filter);
     tracing::info!(
         bind_addr = %settings.bind_addr,
