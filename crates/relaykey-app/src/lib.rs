@@ -5,3 +5,5 @@ pub mod state;
 pub mod telemetry;
 pub mod shutdown;
 pub mod metrics;
+pub mod auth; 
+pub mod proxy; 

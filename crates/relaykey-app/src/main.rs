@@ -5,6 +5,8 @@ mod state;
 mod telemetry;
 mod shutdown; 
 mod metrics;
+mod auth;
+mod proxy;
 
 use axum::http::Request;
 use std::{sync::Arc, time::Duration};
@@ -36,6 +38,7 @@ fn safe_host(database_url: &str) -> String {
 async fn main() -> Result<(), String> {
     dotenvy::dotenv().ok();
     let settings = Settings::from_env()?;
+    let http = reqwest::Client::new();
     telemetry::init(&settings.log_filter);
     tracing::info!(
         bind_addr = %settings.bind_addr,
@@ -53,7 +56,12 @@ async fn main() -> Result<(), String> {
         .await
         .map_err(|e| format!("Redis init failed: {e}"))?;
 
-    let state = Arc::new(AppState { db, redis });
+    let state = Arc::new(AppState { 
+        db, 
+        redis, 
+        http, 
+        key_salt: settings.key_salt.clone(), 
+        });
 
     let middleware = ServiceBuilder::new()
         // set a request id if missing
