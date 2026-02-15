@@ -1,7 +1,9 @@
-pub mod app; 
+pub mod app;
+pub mod auth;
 pub mod health;
+pub mod metrics;
+pub mod proxy;
 pub mod settings;
+pub mod shutdown;
 pub mod state;
 pub mod telemetry;
-pub mod shutdown;
-pub mod metrics;

@@ -1,3 +1,3 @@
 pub mod pool;
-
-pub use pool::{Db, RedisConn, init_db, init_redis};
+pub mod queries;
+pub use pool::{init_db, init_redis, Db, RedisConn};
