@@ -7,8 +7,7 @@ use axum::{
 use std::sync::Arc;
 use url::Url;
 
-use relaykey_db::virtual_keys::{get_credential_for_partner, get_partner_by_name};
-
+use relaykey_db::queries::virtual_keys::{get_credential_for_partner, get_partner_by_name};
 use crate::state::AppState;
 
 static HOP_BY_HOP: &[&str] = &[
@@ -59,6 +58,13 @@ pub async fn proxy_handler(
         Some(pq) => pq.as_str(),
         None => uri.path(),
     };
+
+    // If someone tries to smuggle an absolute URL in the path, reject it.
+    // (Defense-in-depth; should already be safe with our join strategy.)
+    let tail_lc = tail.to_lowercase();
+    if tail_lc.starts_with("http://") || tail_lc.starts_with("https://") {
+        return (StatusCode::BAD_REQUEST, "blocked by SSRF guard").into_response();
+    }
 
     // Ensure request path starts with /proxy/{partner}/ and we forward only the tail
     // We'll reconstruct as "/{tail}" and preserve query string from original uri.

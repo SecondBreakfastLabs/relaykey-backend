@@ -12,7 +12,7 @@ async fn main() -> Result<(), String> {
         .map_err(|e| format!("DB init failed: {e}"))?;
 
     // Runs migrations in ./migrations at the workspace root
-    sqlx::migrate!("./migrations")
+    sqlx::migrate!("../../migrations")
         .run(&db)
         .await
         .map_err(|e| format!("Migration failed: {e}"))?;

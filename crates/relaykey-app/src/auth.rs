@@ -7,7 +7,7 @@ use axum::{
 use std::sync::Arc;
 
 use relaykey_core::crypto::key_hash::hash_virtual_key;
-use relaykey_db::virtual_keys::get_virtual_key_by_hash;
+use relaykey_db::queries::virtual_keys::get_virtual_key_by_hash;
 
 use crate::state::AppState;
 
