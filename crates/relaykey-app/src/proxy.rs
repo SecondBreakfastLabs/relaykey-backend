@@ -33,6 +33,10 @@ pub async fn proxy_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    // Reject potentially dangerous methods that can enable tunneling or reflection.
+    if method == Method::CONNECT || method == Method::TRACE {
+        return StatusCode::METHOD_NOT_ALLOWED.into_response();
+    }
     // 1) Load partner
     let partner_row = match get_partner_by_name(&state.db, &partner).await {
         Ok(Some(p)) => p,
