@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS upstream_credentials (
   partner_id uuid NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
   header_name text NOT NULL,
   header_value text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (partner_id, header_name)
 );
 
 CREATE TABLE IF NOT EXISTS virtual_keys (
