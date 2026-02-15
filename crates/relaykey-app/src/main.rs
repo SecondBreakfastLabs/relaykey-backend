@@ -3,6 +3,8 @@ mod health;
 mod settings;
 mod state;
 mod telemetry;
+mod shutdown; 
+mod metrics;
 
 use axum::http::Request;
 use std::{sync::Arc, time::Duration};
@@ -17,11 +19,31 @@ use relaykey_db::{init_db, init_redis};
 use settings::Settings;
 use state::AppState;
 
+// Helper Function 
+fn safe_host(database_url: &str) -> String {
+    if let Some(at) = database_url.find('@') {
+        let (left, right) = database_url.split_at(at);
+        if let Some(scheme_end) = left.find("://") {
+            let scheme = &left[..scheme_end + 3];
+            return format!("{scheme}***{right}");
+        }
+    }
+    database_url.to_string()
+}
+
+// Main Function 
 #[tokio::main]
 async fn main() -> Result<(), String> {
     dotenvy::dotenv().ok();
     let settings = Settings::from_env()?;
     telemetry::init(&settings.log_filter);
+    tracing::info!(
+        bind_addr = %settings.bind_addr,
+        db_host = %safe_host(&settings.database_url),
+        redis_url = %settings.redis_url,
+        log = %settings.log_filter,
+        "Starting relaykey-app"
+    );
 
     let db = init_db(&settings.database_url)
         .await
@@ -66,6 +88,7 @@ async fn main() -> Result<(), String> {
     tracing::info!("Listening on {}", settings.bind_addr);
 
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown::shutdown())
         .await
         .map_err(|e| format!("Server error: {e}"))?;
 
