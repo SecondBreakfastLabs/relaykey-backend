@@ -1,8 +1,4 @@
-use axum::{
-    extract::State, 
-    http::StatusCode,  
-    response::IntoResponse
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse};
 use std::sync::Arc;
 
 use crate::state::AppState;
@@ -17,7 +13,10 @@ pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
         .fetch_one(&state.db)
         .await
     {
-        return (StatusCode::SERVICE_UNAVAILABLE, format!("db not ready: {e}"));
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("db not ready: {e}"),
+        );
     }
 
     // Redis ping

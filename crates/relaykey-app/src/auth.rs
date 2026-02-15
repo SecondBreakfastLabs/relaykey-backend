@@ -22,7 +22,11 @@ pub async fn require_virtual_key(
     mut req: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
-    let raw = match req.headers().get("x-relaykey").and_then(|v| v.to_str().ok()) {
+    let raw = match req
+        .headers()
+        .get("x-relaykey")
+        .and_then(|v| v.to_str().ok())
+    {
         Some(v) if !v.trim().is_empty() => v.trim().to_string(),
         _ => return (StatusCode::UNAUTHORIZED, "missing x-relaykey").into_response(),
     };

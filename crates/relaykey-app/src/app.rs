@@ -1,5 +1,5 @@
-use axum::{middleware, routing::get, routing::any, Router};
 use axum::extract::DefaultBodyLimit;
+use axum::{middleware, routing::any, routing::get, Router};
 use std::sync::Arc;
 
 use crate::auth::require_virtual_key;
@@ -16,7 +16,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 
     let protected = Router::new()
         .route("/proxy/:partner/*tail", any(proxy_handler))
-        .route_layer(middleware::from_fn_with_state(state.clone(), require_virtual_key));
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_virtual_key,
+        ));
 
     public
         .merge(protected)

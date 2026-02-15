@@ -1,27 +1,27 @@
 mod app;
+mod auth;
 mod health;
+mod metrics;
+mod proxy;
 mod settings;
+mod shutdown;
 mod state;
 mod telemetry;
-mod shutdown; 
-mod metrics;
-mod auth;
-mod proxy;
 
 use axum::http::Request;
 use std::{sync::Arc, time::Duration};
 use tower::ServiceBuilder;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
-    trace::TraceLayer,
     timeout::TimeoutLayer,
+    trace::TraceLayer,
 };
 
 use relaykey_db::{init_db, init_redis};
 use settings::Settings;
 use state::AppState;
 
-// Helper Function 
+// Helper Function
 fn safe_host(database_url: &str) -> String {
     if let Some(at) = database_url.find('@') {
         let (left, right) = database_url.split_at(at);
@@ -33,7 +33,7 @@ fn safe_host(database_url: &str) -> String {
     database_url.to_string()
 }
 
-// Main Function 
+// Main Function
 #[tokio::main]
 async fn main() -> Result<(), String> {
     dotenvy::dotenv().ok();
@@ -60,12 +60,12 @@ async fn main() -> Result<(), String> {
         .await
         .map_err(|e| format!("Redis init failed: {e}"))?;
 
-    let state = Arc::new(AppState { 
-        db, 
-        redis, 
-        http, 
-        key_salt: settings.key_salt.clone(), 
-        });
+    let state = Arc::new(AppState {
+        db,
+        redis,
+        http,
+        key_salt: settings.key_salt.clone(),
+    });
 
     let middleware = ServiceBuilder::new()
         // set a request id if missing
@@ -74,8 +74,7 @@ async fn main() -> Result<(), String> {
         .layer(PropagateRequestIdLayer::x_request_id())
         // tracing for requests
         .layer(
-            TraceLayer::new_for_http()
-            .make_span_with(|req: &Request<_>| {
+            TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
                 let request_id = req
                     .headers()
                     .get("x-request-id")

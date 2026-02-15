@@ -7,8 +7,8 @@ use axum::{
 use std::sync::Arc;
 use url::Url;
 
-use relaykey_db::queries::virtual_keys::{get_credential_for_partner, get_partner_by_name};
 use crate::state::AppState;
+use relaykey_db::queries::virtual_keys::{get_credential_for_partner, get_partner_by_name};
 
 static HOP_BY_HOP: &[&str] = &[
     "connection",
@@ -47,14 +47,26 @@ pub async fn proxy_handler(
     // 2) Load credential (single for Phase 1)
     let cred = match get_credential_for_partner(&state.db, partner_row.id).await {
         Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::INTERNAL_SERVER_ERROR, "missing upstream credential").into_response(),
+        Ok(None) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "missing upstream credential",
+            )
+                .into_response()
+        }
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response(),
     };
 
     // 3) Build upstream URL safely (SSRF protection)
     let base = match Url::parse(&partner_row.base_url) {
         Ok(u) => u,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "invalid partner base_url").into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "invalid partner base_url",
+            )
+                .into_response()
+        }
     };
 
     // Reconstruct path+query from incoming URI:
@@ -113,11 +125,23 @@ pub async fn proxy_handler(
     // Inject upstream credential
     let header_name = match HeaderName::from_bytes(cred.header_name.as_bytes()) {
         Ok(h) => h,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "invalid credential header_name").into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "invalid credential header_name",
+            )
+                .into_response()
+        }
     };
     let header_value = match HeaderValue::from_str(&cred.header_value) {
         Ok(v) => v,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "invalid credential header_value").into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "invalid credential header_value",
+            )
+                .into_response()
+        }
     };
     out = out.header(header_name, header_value);
 
@@ -140,7 +164,9 @@ pub async fn proxy_handler(
 
     let bytes = match resp.bytes().await {
         Ok(b) => b,
-        Err(_) => return (StatusCode::BAD_GATEWAY, "failed to read upstream response").into_response(),
+        Err(_) => {
+            return (StatusCode::BAD_GATEWAY, "failed to read upstream response").into_response()
+        }
     };
 
     (status, resp_headers, bytes).into_response()
