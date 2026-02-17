@@ -1,17 +1,16 @@
 use axum::{http::Request, Extension};
 use std::{sync::Arc, time::Duration};
-use tower::{
-    ServiceBuilder, 
-    make::Shared,
-};
+
+use tower::ServiceBuilder;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
 
-use relaykey_app::{settings::Settings, state::AppState};
 use relaykey_db::{init_db, init_redis};
+use relaykey_app::settings::Settings;
+use relaykey_app::state::AppState;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
@@ -61,17 +60,18 @@ async fn main() -> Result<(), String> {
         )
         .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
+    // build Router<()> then attach Extension(state)
     let app = relaykey_app::app::build_router()
-        .layer(middleware)
-        .with_state(state);
-
-    let make_svc = Shared::new(app.into_service());
+        .layer(Extension(state))
+        .layer(middleware);
 
     let listener = tokio::net::TcpListener::bind(settings.bind_addr)
         .await
         .map_err(|e| format!("Failed to bind {}: {e}", settings.bind_addr))?;
 
-    axum::serve(listener, make_svc)
+    tracing::info!("Listening on {}", settings.bind_addr);
+
+    axum::serve(listener, app.into_make_service())
         .with_graceful_shutdown(relaykey_app::shutdown::shutdown())
         .await
         .map_err(|e| format!("Server error: {e}"))?;

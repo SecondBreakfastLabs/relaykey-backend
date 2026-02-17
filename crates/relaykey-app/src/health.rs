@@ -1,4 +1,4 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse, Extension};
 use std::sync::Arc;
 
 use crate::state::AppState;
@@ -7,7 +7,7 @@ pub async fn health() -> impl IntoResponse {
     (StatusCode::OK, "ok")
 }
 
-pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+pub async fn ready(Extension(state): Extension<Arc<AppState>>) -> impl IntoResponse {
     // Postgres ping
     if let Err(e) = sqlx::query_scalar::<_, i32>("SELECT 1")
         .fetch_one(&state.db)
@@ -20,29 +20,21 @@ pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     }
 
     // Redis ping
-    {
-        // Because state.redis is a redis::Client, we must get a connection first.
-        let mut conn = match state.redis.get_multiplexed_async_connection().await {
-            Ok(c) => c,
-            Err(e) => {
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    format!("redis not ready: {e}"),
-                )
-            }
-        };
+    let mut conn = match state.redis.get_multiplexed_async_connection().await {
+        Ok(c) => c,
+        Err(e) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("redis not ready: {e}"),
+            )
+        }
+    };
 
-        let pong: String = match redis::cmd("PING").query_async(&mut conn).await {
-            Ok(v) => v,
-            Err(e) => {
-                return (
-                    StatusCode::SERVICE_UNAVAILABLE,
-                    format!("redis not ready: {e}"),
-                )
-            }
-        };
-
-        let _ = pong; // keep for clarity
+    if let Err(e) = redis::cmd("PING").query_async::<_, String>(&mut conn).await {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("redis not ready: {e}"),
+        );
     }
 
     (StatusCode::OK, "ready".to_string())

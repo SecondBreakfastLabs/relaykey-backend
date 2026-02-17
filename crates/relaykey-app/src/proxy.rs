@@ -28,8 +28,8 @@ fn is_hop_by_hop(name: &str) -> bool {
     HOP_BY_HOP.contains(&name)
 }
 
-pub async fn proxy_handler(
-    State(state): State<Arc<AppState>>,
+pub async fn handler(
+    Extension(state): Extension<Arc<AppState>>,
     Extension(vk): Extension<VirtualKeyCtx>,
     Path((partner, tail)): Path<(String, String)>,
     method: Method,
