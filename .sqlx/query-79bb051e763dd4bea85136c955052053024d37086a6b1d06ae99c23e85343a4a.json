@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO usage_events (\n            virtual_key_id,\n            partner_name,\n            path,\n            forwarded,\n            blocked_reason,\n            status_code,\n            latency_ms\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "79bb051e763dd4bea85136c955052053024d37086a6b1d06ae99c23e85343a4a"
+}

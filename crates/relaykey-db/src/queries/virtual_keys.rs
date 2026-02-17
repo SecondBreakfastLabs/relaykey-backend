@@ -6,6 +6,9 @@ pub struct VirtualKeyRow {
     pub id: Uuid,
     pub name: String,
     pub enabled: bool,
+    pub rps_limit: Option<i32>,
+    pub rps_burst: Option<i32>,
+    pub monthly_quota: Option<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +31,7 @@ pub async fn get_virtual_key_by_hash(
     let row = sqlx::query_as!(
         VirtualKeyRow,
         r#"
-        SELECT id, name, enabled
+        SELECT id, name, enabled, rps_limit, rps_burst, monthly_quota
         FROM virtual_keys
         WHERE key_hash = $1
         "#,

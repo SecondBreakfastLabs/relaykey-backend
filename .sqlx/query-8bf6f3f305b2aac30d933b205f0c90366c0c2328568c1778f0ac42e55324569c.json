@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, name, enabled, rps_limit, rps_burst, monthly_quota\n        FROM virtual_keys\n        WHERE key_hash = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "rps_limit",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "rps_burst",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "monthly_quota",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "8bf6f3f305b2aac30d933b205f0c90366c0c2328568c1778f0ac42e55324569c"
+}
