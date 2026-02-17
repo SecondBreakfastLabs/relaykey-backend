@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::auth::require_virtual_key;
 use crate::health::{health, ready};
+use crate::limits::middleware::enforce_limits;
 use crate::metrics::metrics;
 use crate::proxy::proxy_handler;
 use crate::state::AppState;
@@ -16,6 +17,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 
     let protected = Router::new()
         .route("/proxy/:partner/*tail", any(proxy_handler))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(), 
+            enforce_limits
+        ))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_virtual_key,

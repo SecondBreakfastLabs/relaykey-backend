@@ -7,6 +7,7 @@ mod settings;
 mod shutdown;
 mod state;
 mod telemetry;
+mod usage;
 
 use axum::http::Request;
 use std::{sync::Arc, time::Duration};

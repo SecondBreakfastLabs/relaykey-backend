@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
-
+use uuid::Uuid;
 use relaykey_core::crypto::key_hash::hash_virtual_key;
 use relaykey_db::queries::virtual_keys::get_virtual_key_by_hash;
 
@@ -13,8 +13,11 @@ use crate::state::AppState;
 
 #[derive(Clone, Debug)]
 pub struct VirtualKeyCtx {
-    pub id: uuid::Uuid,
+    pub id: Uuid,
     pub name: String,
+    pub rps_limit: Option<i32>,
+    pub rps_burst: Option<i32>,
+    pub monthly_quota: Option<i32>,
 }
 
 pub async fn require_virtual_key(
@@ -43,6 +46,9 @@ pub async fn require_virtual_key(
     req.extensions_mut().insert(VirtualKeyCtx {
         id: vk.id,
         name: vk.name,
+        rps_limit: vk.rps_limit,
+        rps_burst: vk.rps_burst,
+        monthly_quota: vk.monthly_quota,
     });
 
     next.run(req).await
