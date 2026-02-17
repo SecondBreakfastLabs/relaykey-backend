@@ -21,7 +21,17 @@ pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 
     // Redis ping
     {
-        let mut conn = state.redis.clone();
+        // Because state.redis is a redis::Client, we must get a connection first.
+        let mut conn = match state.redis.get_multiplexed_async_connection().await {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    format!("redis not ready: {e}"),
+                )
+            }
+        };
+
         let pong: String = match redis::cmd("PING").query_async(&mut conn).await {
             Ok(v) => v,
             Err(e) => {
@@ -31,7 +41,8 @@ pub async fn ready(State(state): State<Arc<AppState>>) -> impl IntoResponse {
                 )
             }
         };
-        let _ = pong;
+
+        let _ = pong; // keep for clarity
     }
 
     (StatusCode::OK, "ready".to_string())

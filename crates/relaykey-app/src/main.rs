@@ -1,57 +1,30 @@
-mod app;
-mod auth;
-mod health;
-mod metrics;
-mod proxy;
-mod settings;
-mod shutdown;
-mod state;
-mod telemetry;
-mod usage;
-
-use axum::http::Request;
+use axum::{http::Request, Extension};
 use std::{sync::Arc, time::Duration};
-use tower::ServiceBuilder;
+use tower::{
+    ServiceBuilder, 
+    make::Shared,
+};
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     timeout::TimeoutLayer,
     trace::TraceLayer,
 };
 
+use relaykey_app::{settings::Settings, state::AppState};
 use relaykey_db::{init_db, init_redis};
-use settings::Settings;
-use state::AppState;
 
-// Helper Function
-fn safe_host(database_url: &str) -> String {
-    if let Some(at) = database_url.find('@') {
-        let (left, right) = database_url.split_at(at);
-        if let Some(scheme_end) = left.find("://") {
-            let scheme = &left[..scheme_end + 3];
-            return format!("{scheme}***{right}");
-        }
-    }
-    database_url.to_string()
-}
-
-// Main Function
 #[tokio::main]
 async fn main() -> Result<(), String> {
     dotenvy::dotenv().ok();
     let settings = Settings::from_env()?;
+
     let http = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| format!("HTTP client init failed: {e}"))?;
-    telemetry::init(&settings.log_filter);
-    tracing::info!(
-        bind_addr = %settings.bind_addr,
-        db_host = %safe_host(&settings.database_url),
-        redis_url = %settings.redis_url,
-        log = %settings.log_filter,
-        "Starting relaykey-app"
-    );
+
+    relaykey_app::telemetry::init(&settings.log_filter);
 
     let db = init_db(&settings.database_url)
         .await
@@ -69,11 +42,8 @@ async fn main() -> Result<(), String> {
     });
 
     let middleware = ServiceBuilder::new()
-        // set a request id if missing
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
-        // propagate it to responses
         .layer(PropagateRequestIdLayer::x_request_id())
-        // tracing for requests
         .layer(
             TraceLayer::new_for_http().make_span_with(|req: &Request<_>| {
                 let request_id = req
@@ -91,16 +61,18 @@ async fn main() -> Result<(), String> {
         )
         .layer(TimeoutLayer::new(Duration::from_secs(30)));
 
-    let app = app::build_router(state).layer(middleware);
+    let app = relaykey_app::app::build_router()
+        .layer(middleware)
+        .with_state(state);
+
+    let make_svc = Shared::new(app.into_service());
 
     let listener = tokio::net::TcpListener::bind(settings.bind_addr)
         .await
         .map_err(|e| format!("Failed to bind {}: {e}", settings.bind_addr))?;
 
-    tracing::info!("Listening on {}", settings.bind_addr);
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown::shutdown())
+    axum::serve(listener, make_svc)
+        .with_graceful_shutdown(relaykey_app::shutdown::shutdown())
         .await
         .map_err(|e| format!("Server error: {e}"))?;
 

@@ -1,9 +1,9 @@
 use axum::{
-    extract::State,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
+    Extension,
 };
 use serde::Serialize;
 use std::{sync::Arc, time::Instant};
@@ -32,8 +32,8 @@ fn parse_partner_from_path(path: &str) -> String {
 }
 
 pub async fn enforce_limits(
-    State(state): State<Arc<AppState>>,
-    req: Request,
+    Extension(state): Extension<Arc<AppState>>,
+    req: Request<axum::body::Body>,
     next: Next,
 ) -> Response {
     let start = Instant::now();
@@ -46,8 +46,21 @@ pub async fn enforce_limits(
     let path = req.uri().path().to_string();
     let partner_name = parse_partner_from_path(&path);
 
-    // MultiplexedConnection is Clone; this creates a new handle.
-    let mut redis_conn = state.redis.clone();
+    // Get a multiplexed connection for this request (Client is Sync; connection is per-request).
+    let mut redis_conn = match state.redis.get_multiplexed_async_connection().await {
+        Ok(c) => c,
+        Err(e) => {
+            // Phase 2: FAIL-OPEN (as requested)
+            warn!(
+                error = %e,
+                vk_id = %vk.id,
+                partner = %partner_name,
+                path = %path,
+                "redis unavailable (fail-open)"
+            );
+            return next.run(req).await;
+        }
+    };
 
     // -----------------------
     // 1) RPS limiter (fail-open on Redis errors)
@@ -56,12 +69,9 @@ pub async fn enforce_limits(
         let cap = vk.rps_burst.unwrap_or(rps).max(1);
 
         match token_bucket_allow(&mut redis_conn, vk.id, rps, cap).await {
-            Ok(true) => {
-                // allowed
-            }
+            Ok(true) => {}
             Ok(false) => {
-                // blocked
-                let latency_ms = start.elapsed().as_millis().min(i64::from(i32::MAX)) as i32;
+                let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
 
                 let _ = insert_usage_event(
                     &state.db,
@@ -84,31 +94,26 @@ pub async fn enforce_limits(
                     .into_response();
             }
             Err(e) => {
-                // FAIL-OPEN: allow request to proceed if Redis limiter is unavailable.
+                // FAIL-OPEN
                 warn!(
                     error = %e,
                     vk_id = %vk.id,
                     partner = %partner_name,
                     path = %path,
-                    "rate limiter unavailable (fail-open)"
+                    "rate limiter error (fail-open)"
                 );
-                // no return; fall through
             }
         }
     }
 
     // -----------------------
     // 2) Monthly quota (fail-open on Redis errors)
-    // increments only when allowed to forward
     // -----------------------
     if let Some(limit) = vk.monthly_quota {
         match monthly_quota_allow_and_incr(&mut redis_conn, vk.id, limit).await {
-            Ok(true) => {
-                // allowed
-            }
+            Ok(true) => {}
             Ok(false) => {
-                // blocked
-                let latency_ms = start.elapsed().as_millis().min(i64::from(i32::MAX)) as i32;
+                let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
 
                 let _ = insert_usage_event(
                     &state.db,
@@ -131,15 +136,14 @@ pub async fn enforce_limits(
                     .into_response();
             }
             Err(e) => {
-                // FAIL-OPEN: allow request to proceed if Redis quota is unavailable.
+                // FAIL-OPEN
                 warn!(
                     error = %e,
                     vk_id = %vk.id,
                     partner = %partner_name,
                     path = %path,
-                    "monthly quota limiter unavailable (fail-open)"
+                    "monthly quota error (fail-open)"
                 );
-                // no return; fall through
             }
         }
     }

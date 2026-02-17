@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT header_name, header_value\n        FROM upstream_credentials\n        WHERE partner_id = $1\n        ORDER BY created_at DESC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "header_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "header_value",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "812ddf7edd17f5aeef64cb340860174959487fdf1da2890ead09ffa96b57ce3a"
+}

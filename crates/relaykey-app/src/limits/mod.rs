@@ -1,3 +1,5 @@
+pub mod middleware;
+
 use redis::{aio::MultiplexedConnection, Script};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -6,11 +8,10 @@ fn now_ms() -> i64 {
     let dur = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
-    (dur.as_millis()) as i64
+    dur.as_millis() as i64
 }
 
 /// Seconds until the start of next month UTC.
-/// Good enough for quotas. (UTC-based)
 fn seconds_until_next_month_utc() -> i64 {
     use time::{Date, Month, OffsetDateTime};
 
@@ -29,7 +30,7 @@ fn seconds_until_next_month_utc() -> i64 {
         .replace_time(time::Time::MIDNIGHT);
 
     let diff = next - now;
-    diff.whole_seconds().max(60) // at least 60s to avoid weirdness
+    diff.whole_seconds().max(60)
 }
 
 pub fn yyyymm_utc() -> String {
@@ -38,13 +39,14 @@ pub fn yyyymm_utc() -> String {
     format!("{:04}{:02}", now.year(), now.month() as u8)
 }
 
+/// Token-bucket limiter.
+/// Key: rl:{vk_id}
 pub async fn token_bucket_allow(
     redis_conn: &mut MultiplexedConnection,
     vk_id: Uuid,
     rate_per_sec: i32,
     capacity: i32,
 ) -> Result<bool, redis::RedisError> {
-    // Atomic refill+consume: returns {allowed(0/1), remaining_tokens}
     static LUA: &str = r#"
 local key = KEYS[1]
 local now_ms = tonumber(ARGV[1])
@@ -87,8 +89,8 @@ return {allowed, tokens}
     Ok(allowed == 1)
 }
 
-/// Atomically checks monthly quota and increments if allowed.
-/// Returns true if allowed; false if quota exceeded.
+/// Monthly quota limiter.
+/// Key: quota:{vk_id}:{YYYYMM}
 pub async fn monthly_quota_allow_and_incr(
     redis_conn: &mut MultiplexedConnection,
     vk_id: Uuid,

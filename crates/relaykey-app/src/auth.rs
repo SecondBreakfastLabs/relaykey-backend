@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    Extension,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -21,7 +21,7 @@ pub struct VirtualKeyCtx {
 }
 
 pub async fn require_virtual_key(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     mut req: Request<axum::body::Body>,
     next: Next,
 ) -> Response {

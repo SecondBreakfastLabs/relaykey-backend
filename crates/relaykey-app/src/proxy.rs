@@ -10,6 +10,7 @@ use url::Url;
 use crate::auth::VirtualKeyCtx;
 use crate::state::AppState;
 use crate::usage::insert_usage_event;
+use crate::usage::BlockedReason;
 use relaykey_db::queries::virtual_keys::{get_credential_for_partner, get_partner_by_name};
 
 static HOP_BY_HOP: &[&str] = &[
@@ -101,7 +102,7 @@ pub async fn proxy_handler(
                 .into_response();
         }
         Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
@@ -121,7 +122,7 @@ pub async fn proxy_handler(
     let base = match Url::parse(&partner_row.base_url) {
         Ok(u) => u,
         Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
@@ -144,7 +145,7 @@ pub async fn proxy_handler(
     // Defense-in-depth: reject URL-looking tails explicitly.
     let tail_lc = tail.to_lowercase();
     if tail_lc.starts_with("http://") || tail_lc.starts_with("https://") {
-        let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+        let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
         let _ = insert_usage_event(
             &state.db,
             vk.id,
@@ -170,7 +171,7 @@ pub async fn proxy_handler(
     let joined = match base.join(&(forwarded_path + &query)) {
         Ok(u) => u,
         Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
@@ -191,7 +192,7 @@ pub async fn proxy_handler(
         || joined.host_str() != base.host_str()
         || joined.port_or_known_default() != base.port_or_known_default()
     {
-        let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+        let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
         let _ = insert_usage_event(
             &state.db,
             vk.id,
@@ -235,7 +236,7 @@ pub async fn proxy_handler(
     let header_name = match HeaderName::from_bytes(cred.header_name.as_bytes()) {
         Ok(h) => h,
         Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
@@ -258,7 +259,7 @@ pub async fn proxy_handler(
     let header_value = match HeaderValue::from_str(&cred.header_value) {
         Ok(v) => v,
         Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
@@ -284,7 +285,7 @@ pub async fn proxy_handler(
     let resp = match out.body(body).send().await {
         Ok(r) => r,
         Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
@@ -319,7 +320,7 @@ pub async fn proxy_handler(
         resp_headers.insert(name, value.clone());
     }
 
-    let latency_ms = start.elapsed().as_millis().min(u128::from(i32::MAX)) as i32;
+    let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
 
     // Emit usage event (forwarded)
     let _ = insert_usage_event(

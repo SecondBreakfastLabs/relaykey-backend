@@ -1,33 +1,28 @@
-use axum::extract::DefaultBodyLimit;
-use axum::{middleware, routing::any, routing::get, Router};
+use axum::{
+    extract::DefaultBodyLimit,
+    middleware,
+    routing::get,
+    Router,
+};
 use std::sync::Arc;
-
-use crate::auth::require_virtual_key;
-use crate::health::{health, ready};
-use crate::limits::middleware::enforce_limits;
-use crate::metrics::metrics;
-use crate::proxy::proxy_handler;
 use crate::state::AppState;
+use crate::{
+    auth::require_virtual_key,
+    health,
+    limits::middleware::enforce_limits,
+};
 
-pub fn build_router(state: Arc<AppState>) -> Router {
+pub fn build_router() -> Router<Arc<AppState>> {
     let public = Router::new()
-        .route("/health", get(health))
-        .route("/ready", get(ready))
-        .route("/metrics", get(metrics));
+        .route("/health", get(health::health))
+        .route("/ready", get(health::ready));
 
     let protected = Router::new()
-        .route("/proxy/:partner/*tail", any(proxy_handler))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(), 
-            enforce_limits
-        ))
-        .route_layer(middleware::from_fn_with_state(
-            state.clone(),
-            require_virtual_key,
-        ));
+        // .route("/proxy/:partner/*tail", any(proxy::handler))
+        .route_layer(middleware::from_fn(enforce_limits))
+        .route_layer(middleware::from_fn(require_virtual_key));
 
     public
         .merge(protected)
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
-        .with_state(state)
 }
