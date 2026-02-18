@@ -7,6 +7,7 @@ use axum::{
 
 use crate::{
     auth::require_virtual_key,
+    admin::virtual_keys, 
     health,
     limits::middleware::enforce_limits,
     metrics,
@@ -23,6 +24,13 @@ pub fn build_router() -> Router<()> {
         .route("/proxy/:partner/*tail", any(proxy::handler))
         .route_layer(middleware::from_fn(enforce_limits))
         .route_layer(middleware::from_fn(require_virtual_key));
+
+        let admin = Router::new()
+        .route("/admin/virtual-keys",
+            post(virtual_keys::create_virtual_key)
+            .get(virtual_keys::list_virtual_keys)
+        )
+        .route_layer(middleware::from_fn(require_admin));
 
     public
         .merge(protected)

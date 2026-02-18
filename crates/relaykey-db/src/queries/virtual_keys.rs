@@ -1,14 +1,19 @@
 use sqlx::PgPool;
 use uuid::Uuid;
+use chrono; 
 
 #[derive(Debug, Clone)]
 pub struct VirtualKeyRow {
     pub id: Uuid,
     pub name: String,
+    pub environment: String, 
+    pub tags: Vec<String>, 
     pub enabled: bool,
     pub rps_limit: Option<i32>,
     pub rps_burst: Option<i32>,
     pub monthly_quota: Option<i32>,
+    pub key_hash: String, 
+    pub created_at: chrono::DateTime<chrono::Utc>, 
 }
 
 #[derive(Debug, Clone)]
@@ -31,7 +36,17 @@ pub async fn get_virtual_key_by_hash(
     let row = sqlx::query_as!(
         VirtualKeyRow,
         r#"
-        SELECT id, name, enabled, rps_limit, rps_burst, monthly_quota
+        SELECT 
+            id,
+            name,
+            environment,  
+            tags, 
+            enabled,
+            rps_limit,
+            rps_burst,
+            monthly_quota,
+            key_hash, 
+            created_at 
         FROM virtual_keys
         WHERE key_hash = $1
         "#,

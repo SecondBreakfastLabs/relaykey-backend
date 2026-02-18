@@ -15,6 +15,8 @@ use crate::state::AppState;
 pub struct VirtualKeyCtx {
     pub id: Uuid,
     pub name: String,
+    pub environment: String, 
+    pub tags: Vec<String>, 
     pub rps_limit: Option<i32>,
     pub rps_burst: Option<i32>,
     pub monthly_quota: Option<i32>,
@@ -46,6 +48,8 @@ pub async fn require_virtual_key(
     req.extensions_mut().insert(VirtualKeyCtx {
         id: vk.id,
         name: vk.name,
+        environment: vk.environment, 
+        tags: vk.tags, 
         rps_limit: vk.rps_limit,
         rps_burst: vk.rps_burst,
         monthly_quota: vk.monthly_quota,
@@ -53,3 +57,26 @@ pub async fn require_virtual_key(
 
     next.run(req).await
 }
+
+pub async fn require_admin(
+    Extension(state): Extension<Arc<AppState>>,
+    req: Request<Body>,
+    next: Next,
+  ) -> Response {
+    let expected = std::env::var("ADMIN_TOKEN").ok();
+    let Some(expected) = expected else {
+      return (StatusCode::INTERNAL_SERVER_ERROR, "admin not configured").into_response();
+    };
+  
+    let token = req.headers()
+      .get("x-admin-token")
+      .and_then(|v| v.to_str().ok())
+      .unwrap_or("");
+  
+    if token != expected {
+      return (StatusCode::UNAUTHORIZED, "unauthorized").into_response();
+    }
+  
+    next.run(req).await
+  }
+  

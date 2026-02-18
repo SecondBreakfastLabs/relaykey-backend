@@ -10,3 +10,4 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "mi
 redis = { version = "0.25", features = ["tokio-comp"] }
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
+chrono = "0.4.43"
