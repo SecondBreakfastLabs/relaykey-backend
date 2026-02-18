@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 use uuid::Uuid;
+use crate::queries::virtual_keys::VirtualKeyRow;
 
 pub async fn insert_virtual_key(
     db: &PgPool,
@@ -47,6 +48,7 @@ pub async fn list_virtual_keys(
         name,
         environment,
         tags,
+        key_hash, 
         enabled,
         rps_limit,
         rps_burst,

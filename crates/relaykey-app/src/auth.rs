@@ -3,6 +3,7 @@ use axum::{
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
+    body::Body,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -59,7 +60,7 @@ pub async fn require_virtual_key(
 }
 
 pub async fn require_admin(
-    Extension(state): Extension<Arc<AppState>>,
+    Extension(_state): Extension<Arc<AppState>>,
     req: Request<Body>,
     next: Next,
   ) -> Response {
