@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n        id,\n        name,\n        environment,\n        tags,\n        key_hash, \n        enabled,\n        rps_limit,\n        rps_burst,\n        monthly_quota,\n        created_at\n        FROM virtual_keys\n        ORDER BY created_at DESC\n        ",
+  "query": "\n        SELECT \n            id,\n            name,\n            environment,  \n            tags, \n            enabled,\n            rps_limit,\n            rps_burst,\n            monthly_quota,\n            key_hash,\n            policy_id,  \n            created_at \n        FROM virtual_keys\n        WHERE key_hash = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -25,37 +25,44 @@
       },
       {
         "ordinal": 4,
-        "name": "key_hash",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
         "name": "enabled",
         "type_info": "Bool"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "rps_limit",
         "type_info": "Int4"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "rps_burst",
         "type_info": "Int4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "monthly_quota",
         "type_info": "Int4"
       },
       {
+        "ordinal": 8,
+        "name": "key_hash",
+        "type_info": "Text"
+      },
+      {
         "ordinal": 9,
+        "name": "policy_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text"
+      ]
     },
     "nullable": [
       false,
@@ -63,12 +70,13 @@
       false,
       false,
       false,
+      true,
+      true,
+      true,
       false,
-      true,
-      true,
-      true,
+      false,
       false
     ]
   },
-  "hash": "05d00a8d0cfd35375bc065d1303ba37081892476c825523510eaab84c42990e0"
+  "hash": "63eae90347ccb9b1220432524274e5d56e784fd60c407a6361934ec9bb80921d"
 }

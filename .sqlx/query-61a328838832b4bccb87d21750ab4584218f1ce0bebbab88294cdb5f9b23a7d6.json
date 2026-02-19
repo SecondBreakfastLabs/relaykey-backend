@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            name,\n            environment,  \n            tags, \n            enabled,\n            rps_limit,\n            rps_burst,\n            monthly_quota,\n            key_hash, \n            created_at \n        FROM virtual_keys\n        WHERE key_hash = $1\n        ",
+  "query": "\n        SELECT\n        id,\n        name,\n        environment,\n        tags,\n        key_hash, \n        enabled,\n        rps_limit,\n        rps_burst,\n        monthly_quota,\n        policy_id, \n        created_at\n        FROM virtual_keys\n        ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -25,41 +25,45 @@
       },
       {
         "ordinal": 4,
-        "name": "enabled",
-        "type_info": "Bool"
-      },
-      {
-        "ordinal": 5,
-        "name": "rps_limit",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 6,
-        "name": "rps_burst",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 7,
-        "name": "monthly_quota",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 8,
         "name": "key_hash",
         "type_info": "Text"
       },
       {
+        "ordinal": 5,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "rps_limit",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "rps_burst",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "monthly_quota",
+        "type_info": "Int4"
+      },
+      {
         "ordinal": 9,
+        "name": "policy_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": [
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -72,5 +76,5 @@
       false
     ]
   },
-  "hash": "bd6f97375b46864b6b6e58e3fc206fe69f23ae6c6c65153b49133445dd45de91"
+  "hash": "61a328838832b4bccb87d21750ab4584218f1ce0bebbab88294cdb5f9b23a7d6"
 }

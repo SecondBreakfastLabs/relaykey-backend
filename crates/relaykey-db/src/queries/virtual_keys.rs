@@ -13,6 +13,7 @@ pub struct VirtualKeyRow {
     pub rps_burst: Option<i32>,
     pub monthly_quota: Option<i32>,
     pub key_hash: String, 
+    pub policy_id: Uuid,
     pub created_at: chrono::DateTime<chrono::Utc>, 
 }
 
@@ -45,7 +46,8 @@ pub async fn get_virtual_key_by_hash(
             rps_limit,
             rps_burst,
             monthly_quota,
-            key_hash, 
+            key_hash,
+            policy_id,  
             created_at 
         FROM virtual_keys
         WHERE key_hash = $1

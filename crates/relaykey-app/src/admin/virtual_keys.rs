@@ -1,7 +1,7 @@
 use axum::{
     Extension,
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -19,9 +19,9 @@ pub struct CreateVirtualKeyRequest {
     pub environment: String,
     #[serde(default)]
     pub tags: Vec<String>,
-    pub rps_limit: Option<i32>,
-    pub rps_burst: Option<i32>,
-    pub monthly_quota: Option<i32>,
+
+    // Phase 4: required - keys must point at a policy
+    pub policy_id: Uuid,
 }
 
 #[derive(Serialize)]
@@ -37,44 +37,47 @@ pub struct VirtualKeyResponse {
     pub environment: String,
     pub tags: Vec<String>,
     pub enabled: bool,
-    pub rps_limit: Option<i32>,
-    pub rps_burst: Option<i32>,
-    pub monthly_quota: Option<i32>,
-    pub created_at: String, // simplest cross-crate representation
+    pub policy_id: Uuid,
+    pub created_at: String, // Display-based (works across chrono/time)
 }
 
 pub async fn create_virtual_key(
     Extension(state): Extension<Arc<AppState>>,
     Json(body): Json<CreateVirtualKeyRequest>,
-) -> impl IntoResponse {
-    // Generate raw key (you probably want environment-aware; leaving your current logic intact)
-    let raw_key = format!("rk_live_{}", Uuid::new_v4());
+) -> Response {
+    // Make the raw key environment-aware (nice for debugging/tests)
+    let raw_key = format!("rk_{}_{}", body.environment, Uuid::new_v4());
 
     let key_hash = hash_virtual_key(&state.key_salt, &raw_key);
 
+    // Phase 4: limits live on the policy, so pass None for per-key limits
     let id = match insert_virtual_key(
         &state.db,
         &body.name,
         &body.environment,
         &body.tags,
+        body.policy_id,
         &key_hash,
         true,
-        body.rps_limit,
-        body.rps_burst,
-        body.monthly_quota,
+        None, // rps_limit
+        None, // rps_burst
+        None, // monthly_quota
     )
     .await
     {
         Ok(id) => id,
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "insert_virtual_key failed");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
-    Json(CreateVirtualKeyResponse { id, key: raw_key }).into_response()
+    (StatusCode::CREATED, Json(CreateVirtualKeyResponse { id, key: raw_key })).into_response()
 }
 
 pub async fn list_virtual_keys_handler(
-    Extension(state): Extension<Arc<AppState>>
-) -> impl IntoResponse {
+    Extension(state): Extension<Arc<AppState>>,
+) -> Response {
     match list_virtual_keys(&state.db).await {
         Ok(keys) => {
             let out: Vec<VirtualKeyResponse> = keys
@@ -85,17 +88,16 @@ pub async fn list_virtual_keys_handler(
                     environment: k.environment,
                     tags: k.tags,
                     enabled: k.enabled,
-                    rps_limit: k.rps_limit,
-                    rps_burst: k.rps_burst,
-                    monthly_quota: k.monthly_quota,
-                    created_at: k.created_at.to_rfc3339(), // if created_at is chrono::DateTime
+                    policy_id: k.policy_id,
+                    created_at: k.created_at.to_string(),
                 })
                 .collect();
 
             Json(out).into_response()
         }
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "list_virtual_keys failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
-
-

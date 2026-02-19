@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id, \n            name, \n            endpoint_allowlist as \"endpoint_allowlist!\",\n            rps_limit, \n            rps_burst, \n            monthly_quota,\n            timeout_ms\n        FROM policies \n        WHERE id = $1 \n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "endpoint_allowlist!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "rps_limit",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "rps_burst",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "monthly_quota",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "timeout_ms",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "f5443ed0e3b6ceb4c4a6d02cd7504167d761c92ac7d36925ef9561af70649d61"
+}
