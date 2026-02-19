@@ -1,17 +1,19 @@
 use axum::{
     extract::DefaultBodyLimit,
     middleware,
-    routing::{any, get},
+    routing::{any, get, post},
     Router,
 };
 
 use crate::{
-    auth::require_virtual_key,
+    auth::{require_admin, require_virtual_key},
+    admin::virtual_keys,
     health,
     limits::middleware::enforce_limits,
     metrics,
     proxy,
 };
+
 
 pub fn build_router() -> Router<()> {
     let public = Router::new()
@@ -24,7 +26,16 @@ pub fn build_router() -> Router<()> {
         .route_layer(middleware::from_fn(enforce_limits))
         .route_layer(middleware::from_fn(require_virtual_key));
 
+    let admin = Router::new()
+        .route(
+            "/admin/virtual-keys",
+            post(virtual_keys::create_virtual_key)
+                .get(virtual_keys::list_virtual_keys_handler),
+        )
+        .route_layer(middleware::from_fn(require_admin));
+
     public
         .merge(protected)
+        .merge(admin) 
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
 }
