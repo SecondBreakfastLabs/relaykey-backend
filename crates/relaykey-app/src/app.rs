@@ -27,13 +27,15 @@ pub fn build_router() -> Router<()> {
         .route_layer(middleware::from_fn(require_virtual_key));
 
     let admin = Router::new()
-        .route("/admin/virtual-keys",
+        .route(
+            "/admin/virtual-keys",
             post(virtual_keys::create_virtual_key)
-            .get(virtual_keys::list_virtual_keys_handler)
+                .get(virtual_keys::list_virtual_keys_handler),
         )
         .route_layer(middleware::from_fn(require_admin));
 
     public
         .merge(protected)
+        .merge(admin) 
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
 }

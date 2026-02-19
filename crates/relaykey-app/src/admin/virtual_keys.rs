@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    Extension,
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -44,7 +44,7 @@ pub struct VirtualKeyResponse {
 }
 
 pub async fn create_virtual_key(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>,
     Json(body): Json<CreateVirtualKeyRequest>,
 ) -> impl IntoResponse {
     // Generate raw key (you probably want environment-aware; leaving your current logic intact)
@@ -73,7 +73,7 @@ pub async fn create_virtual_key(
 }
 
 pub async fn list_virtual_keys_handler(
-    State(state): State<Arc<AppState>>,
+    Extension(state): Extension<Arc<AppState>>
 ) -> impl IntoResponse {
     match list_virtual_keys(&state.db).await {
         Ok(keys) => {
