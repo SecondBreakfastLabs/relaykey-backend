@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        INSERT INTO virtual_keys\n        (name, environment, tags, key_hash, enabled, rps_limit, rps_burst, monthly_quota)\n        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)\n        RETURNING id\n        ",
+  "query": "\n        INSERT INTO virtual_keys\n        (name, environment, tags, policy_id, key_hash, enabled, rps_limit, rps_burst, monthly_quota)\n        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)\n        RETURNING id\n        ",
   "describe": {
     "columns": [
       {
@@ -14,6 +14,7 @@
         "Text",
         "Text",
         "TextArray",
+        "Uuid",
         "Text",
         "Bool",
         "Int4",
@@ -25,5 +26,5 @@
       false
     ]
   },
-  "hash": "f2db8d87a5b34ca73c55638a9071f605207fec4c510e8a95af768e89fb5f6112"
+  "hash": "45492b2b4fce704ab0c5b97d7209931822087f985da628716116d206dc74d2d2"
 }
