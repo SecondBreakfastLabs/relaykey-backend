@@ -12,6 +12,7 @@ use crate::{
     limits::middleware::enforce_limits,
     metrics,
     proxy,
+    policies::allowlist::enforce_allowlist,
 };
 
 
@@ -24,6 +25,7 @@ pub fn build_router() -> Router<()> {
     let protected = Router::new()
         .route("/proxy/:partner/*tail", any(proxy::handler))
         .route_layer(middleware::from_fn(enforce_limits))
+        .route_layer(middleware::from_fn(enforce_allowlist))
         .route_layer(middleware::from_fn(require_virtual_key));
 
     let admin = Router::new()

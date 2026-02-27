@@ -2,16 +2,19 @@ use axum::{
     body::{Body, Bytes},
     extract::{Extension, Path},
     http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Response}, 
 };
 use std::{sync::Arc, time::Instant};
 use url::Url;
-
+use tokio::time::{timeout, Duration};
 use crate::auth::VirtualKeyCtx;
 use crate::state::AppState;
 use crate::usage::insert_usage_event;
 use crate::usage::BlockedReason;
-use relaykey_db::queries::virtual_keys::{get_credential_for_partner, get_partner_by_name};
+use relaykey_db::queries::{
+    virtual_keys::{get_credential_for_partner, get_partner_by_name}, 
+    policies::PolicyRow,
+};
 
 static HOP_BY_HOP: &[&str] = &[
     "connection",
@@ -31,6 +34,7 @@ fn is_hop_by_hop(name: &str) -> bool {
 pub async fn handler(
     Extension(state): Extension<Arc<AppState>>,
     Extension(vk): Extension<VirtualKeyCtx>,
+    Extension(policy): Extension<PolicyRow>,
     Path((partner, tail)): Path<(String, String)>,
     method: Method,
     uri: Uri,
@@ -282,24 +286,17 @@ pub async fn handler(
     out = out.header(header_name, header_value);
 
     // Send upstream request
-    let resp = match out.body(body).send().await {
-        Ok(r) => r,
-        Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
-            let _ = insert_usage_event(
-                &state.db,
-                vk.id,
-                &partner_row.name,
-                uri.path(),
-                false,
-                Some(BlockedReason::UpstreamRequestFailed),
-                None,
-                latency_ms,
-            )
-            .await;
-            return (StatusCode::BAD_GATEWAY, "upstream request failed").into_response();
+    let send_fut = out.body(body).send(); 
+    let timeout_ms: u64 = policy.timeout_ms.max(1) as u64;
+    let resp = match timeout(Duration::from_millis(timeout_ms), send_fut).await{
+        Ok(Ok(r)) => r, 
+        Ok(Err(_e)) => {
+            return (StatusCode::BAD_GATEWAY, "upstream request failed").into_response(); 
         }
-    };
+        Err(_elapsed) => {
+            return (StatusCode::GATEWAY_TIMEOUT, "upstream request timed out").into_response();
+        }
+    }; 
 
     // 5) Return upstream response (streaming; filter headers)
     let status = resp.status();
