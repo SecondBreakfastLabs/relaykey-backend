@@ -2,18 +2,25 @@ use axum::{
     body::{Body, Bytes},
     extract::{Extension, Path},
     http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
-    response::{IntoResponse, Response}, 
+    response::{IntoResponse, Response},
 };
 use std::{sync::Arc, time::Instant};
+use tokio::time::{sleep, timeout, Duration};
 use url::Url;
-use tokio::time::{timeout, Duration};
+
 use crate::auth::VirtualKeyCtx;
 use crate::state::AppState;
-use crate::usage::insert_usage_event;
-use crate::usage::BlockedReason;
-use relaykey_db::queries::{
-    virtual_keys::{get_credential_for_partner, get_partner_by_name}, 
-    policies::PolicyRow,
+use crate::usage::{insert_usage_event, BlockedReason};
+
+// NOTE: adjust this import path to wherever PolicyRow lives in your repo.
+// In your earlier messages you had: relaykey_db::queries::policies::PolicyRow
+use relaykey_db::queries::policies::PolicyRow;
+use relaykey_db::queries::virtual_keys::{get_credential_for_partner, get_partner_by_name};
+
+use crate::retry::{
+    classify::{classify_reqwest_error, classify_status, RetryClass},
+    partner::{profile_for_partner, status_retry_allowed},
+    policy::RetryPolicy,
 };
 
 static HOP_BY_HOP: &[&str] = &[
@@ -31,6 +38,23 @@ fn is_hop_by_hop(name: &str) -> bool {
     HOP_BY_HOP.contains(&name)
 }
 
+fn is_idempotent(method: &Method) -> bool {
+    matches!(method, &Method::GET | &Method::HEAD |&Method::OPTIONS)
+}
+
+fn backoff_ms(attempt: usize, base: u64, cap: u64) -> u64 {
+    // attempt starts at 1
+    let exp = 1u64.checked_shl((attempt.saturating_sub(1)).min(10) as u32).unwrap_or(u64::MAX);
+    let raw = base.saturating_mul(exp);
+    raw.min(cap)
+}
+
+fn cheap_jitter_ms(attempt: usize) -> u64 {
+    // deterministic tiny jitter (no rand dependency)
+    // spreads concurrent retries slightly
+    ((attempt as u64 * 37) % 23) as u64
+}
+
 pub async fn handler(
     Extension(state): Extension<Arc<AppState>>,
     Extension(vk): Extension<VirtualKeyCtx>,
@@ -43,7 +67,6 @@ pub async fn handler(
 ) -> Response {
     let start = Instant::now();
 
-    // Reject potentially dangerous methods that can enable tunneling or reflection.
     if method == Method::CONNECT || method == Method::TRACE {
         return StatusCode::METHOD_NOT_ALLOWED.into_response();
     }
@@ -83,7 +106,7 @@ pub async fn handler(
         }
     };
 
-    // 2) Load credential (Phase 1/2: latest header for partner)
+    // 2) Load credential
     let cred = match get_credential_for_partner(&state.db, partner_row.id).await {
         Ok(Some(c)) => c,
         Ok(None) => {
@@ -99,11 +122,7 @@ pub async fn handler(
                 latency_ms,
             )
             .await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "missing upstream credential",
-            )
-                .into_response();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "missing upstream credential").into_response();
         }
         Err(_) => {
             let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
@@ -122,7 +141,7 @@ pub async fn handler(
         }
     };
 
-    // 3) Build upstream URL safely (SSRF protection)
+    // 3) Build upstream URL safely
     let base = match Url::parse(&partner_row.base_url) {
         Ok(u) => u,
         Err(_) => {
@@ -138,15 +157,10 @@ pub async fn handler(
                 latency_ms,
             )
             .await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "invalid partner base_url",
-            )
-                .into_response();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "invalid partner base_url").into_response();
         }
     };
 
-    // Defense-in-depth: reject URL-looking tails explicitly.
     let tail_lc = tail.to_lowercase();
     if tail_lc.starts_with("http://") || tail_lc.starts_with("https://") {
         let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
@@ -164,12 +178,7 @@ pub async fn handler(
         return (StatusCode::BAD_REQUEST, "blocked by SSRF guard").into_response();
     }
 
-    // Forward only the captured tail; preserve query string.
-    let forwarded_path = if tail.is_empty() {
-        "/".to_string()
-    } else {
-        format!("/{}", tail)
-    };
+    let forwarded_path = if tail.is_empty() { "/".to_string() } else { format!("/{}", tail) };
     let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
 
     let joined = match base.join(&(forwarded_path + &query)) {
@@ -191,7 +200,6 @@ pub async fn handler(
         }
     };
 
-    // SSRF guard: enforce origin unchanged (host/scheme/port must match base)
     if joined.scheme() != base.scheme()
         || joined.host_str() != base.host_str()
         || joined.port_or_known_default() != base.port_or_known_default()
@@ -211,129 +219,167 @@ pub async fn handler(
         return (StatusCode::BAD_REQUEST, "blocked by SSRF guard").into_response();
     }
 
-    // 4) Build outgoing request
-    let mut out = state.http.request(method, joined);
-
-    // Copy safe headers (blocklist approach for Phase 1/2)
-    for (name, value) in headers.iter() {
-        let name_str = name.as_str().to_lowercase();
-
-        // never forward these
-        if name_str == "host" || name_str == "x-relaykey" || name_str == "x-request-id" {
-            continue;
-        }
-
-        // drop hop-by-hop headers
-        if is_hop_by_hop(&name_str) {
-            continue;
-        }
-
-        // drop sensitive end-user / proxy headers
-        if name_str == "authorization" || name_str == "cookie" || name_str.starts_with("proxy-") {
-            continue;
-        }
-
-        out = out.header(name, value);
-    }
-
-    // Inject upstream credential
+    // Prepare reusable parsed credential header
     let header_name = match HeaderName::from_bytes(cred.header_name.as_bytes()) {
         Ok(h) => h,
-        Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
-            let _ = insert_usage_event(
-                &state.db,
-                vk.id,
-                &partner_row.name,
-                uri.path(),
-                false,
-                Some(BlockedReason::InvalidCredentialHeaderName),
-                None,
-                latency_ms,
-            )
-            .await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "invalid credential header_name",
-            )
-                .into_response();
-        }
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "invalid credential header_name").into_response(),
     };
 
     let header_value = match HeaderValue::from_str(&cred.header_value) {
         Ok(v) => v,
-        Err(_) => {
-            let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
-            let _ = insert_usage_event(
-                &state.db,
-                vk.id,
-                &partner_row.name,
-                uri.path(),
-                false,
-                Some(BlockedReason::InvalidCredentialHeaderValue),
-                None,
-                latency_ms,
-            )
-            .await;
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "invalid credential header_value",
-            )
-                .into_response();
-        }
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "invalid credential header_value").into_response(),
     };
 
-    out = out.header(header_name, header_value);
+    // -------------------------
+    // Phase 5: retry loop
+    // -------------------------
+    let retry_policy = RetryPolicy::default();
+    let partner_profile = profile_for_partner(&partner_row.name);
+    let allow_retries = is_idempotent(&method);
 
-    // Send upstream request
-    let send_fut = out.body(body).send(); 
-    let timeout_ms: u64 = policy.timeout_ms.max(1) as u64;
-    let resp = match timeout(Duration::from_millis(timeout_ms), send_fut).await{
-        Ok(Ok(r)) => r, 
-        Ok(Err(_e)) => {
-            return (StatusCode::BAD_GATEWAY, "upstream request failed").into_response(); 
+    let total_budget_ms: u64 = policy.timeout_ms.max(1) as u64;
+    let deadline = Instant::now() + Duration::from_millis(total_budget_ms);
+
+    let mut attempt: usize = 0;
+    let mut retries: usize = 0;
+
+    // Helper: build request fresh each attempt (reqwest builders are one-shot)
+    let build_reqwest = || {
+        let mut out = state.http.request(method.clone(), joined.clone());
+
+        for (name, value) in headers.iter() {
+            let name_str = name.as_str().to_lowercase();
+
+            if name_str == "host" || name_str == "x-relaykey" || name_str == "x-request-id" {
+                continue;
+            }
+            if is_hop_by_hop(&name_str) {
+                continue;
+            }
+            if name_str == "authorization" || name_str == "cookie" || name_str.starts_with("proxy-") {
+                continue;
+            }
+
+            out = out.header(name, value);
         }
-        Err(_elapsed) => {
+
+        out = out.header(header_name.clone(), header_value.clone());
+        out
+    };
+
+    loop {
+        attempt += 1;
+
+        // Remaining overall time budget
+        let now = Instant::now();
+        if now >= deadline {
             return (StatusCode::GATEWAY_TIMEOUT, "upstream request timed out").into_response();
         }
-    }; 
+        let remaining = deadline - now;
 
-    // 5) Return upstream response (streaming; filter headers)
-    let status = resp.status();
+        // Send attempt with remaining budget as timeout
+        let send_fut = build_reqwest().body(body.clone()).send();
 
-    let mut resp_headers = axum::http::HeaderMap::new();
-    for (name, value) in resp.headers().iter() {
-        let name_str = name.as_str().to_lowercase();
+        let resp_result = timeout(remaining, send_fut).await;
 
-        if is_hop_by_hop(&name_str) {
-            continue;
+        match resp_result {
+            // Completed with an HTTP response
+            Ok(Ok(resp)) => {
+                let status = resp.status();
+                let class = classify_status(StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY));
+
+                let can_retry_status =
+                    allow_retries
+                        && class == RetryClass::Retryable
+                        && status_retry_allowed(&partner_profile, StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY))
+                        && attempt < retry_policy.max_attempts;
+
+                if can_retry_status {
+                    retries += 1;
+                    let sleep_ms = backoff_ms(attempt, retry_policy.base_backoff_ms, retry_policy.max_backoff_ms)
+                        + cheap_jitter_ms(attempt);
+                    sleep(Duration::from_millis(sleep_ms)).await;
+                    continue;
+                }
+
+                // Return upstream response (streaming; filter headers)
+                let mut resp_headers = axum::http::HeaderMap::new();
+                for (name, value) in resp.headers().iter() {
+                    let name_str = name.as_str().to_lowercase();
+                    if is_hop_by_hop(&name_str) {
+                        continue;
+                    }
+                    if name_str == "set-cookie" {
+                        continue;
+                    }
+                    resp_headers.insert(name, value.clone());
+                }
+
+                let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
+
+                let _ = insert_usage_event(
+                    &state.db,
+                    vk.id,
+                    &partner_row.name,
+                    uri.path(),
+                    true,
+                    None,
+                    Some(status.as_u16()),
+                    latency_ms,
+                )
+                .await;
+
+                tracing::info!(
+                    partner = %partner_row.name,
+                    attempts = attempt,
+                    retries = retries,
+                    status = status.as_u16(),
+                    "proxy completed"
+                );
+
+                let body_stream = Body::from_stream(resp.bytes_stream());
+                return (status, resp_headers, body_stream).into_response();
+            }
+
+            // Completed with a reqwest error
+            Ok(Err(e)) => {
+                let class = classify_reqwest_error(&e);
+
+                let can_retry_err =
+                    allow_retries
+                        && class == RetryClass::Retryable
+                        && attempt < retry_policy.max_attempts;
+
+                if can_retry_err {
+                    retries += 1;
+                    let sleep_ms = backoff_ms(attempt, retry_policy.base_backoff_ms, retry_policy.max_backoff_ms)
+                        + cheap_jitter_ms(attempt);
+                    tracing::warn!(
+                        partner = %partner_row.name,
+                        attempt,
+                        retries,
+                        error = %e,
+                        "upstream error (retrying)"
+                    );
+                    sleep(Duration::from_millis(sleep_ms)).await;
+                    continue;
+                }
+
+                tracing::warn!(
+                    partner = %partner_row.name,
+                    attempts = attempt,
+                    retries = retries,
+                    error = %e,
+                    "upstream request failed"
+                );
+                return (StatusCode::BAD_GATEWAY, "upstream request failed").into_response();
+            }
+
+            // tokio timeout elapsed (hit overall budget for this attempt)
+            Err(_elapsed) => {
+                // since we use remaining budget, this effectively means total budget expired
+                return (StatusCode::GATEWAY_TIMEOUT, "upstream request timed out").into_response();
+            }
         }
-
-        // Don't leak upstream cookies to callers.
-        if name_str == "set-cookie" {
-            continue;
-        }
-
-        resp_headers.insert(name, value.clone());
     }
-
-    let latency_ms = start.elapsed().as_millis().min(i32::MAX as u128) as i32;
-
-    // Emit usage event (forwarded)
-    let _ = insert_usage_event(
-        &state.db,
-        vk.id,
-        &partner_row.name,
-        uri.path(),
-        true,
-        None,
-        Some(status.as_u16()),
-        latency_ms,
-    )
-    .await;
-
-    // Stream upstream body to client (prevents buffering huge responses in memory).
-    let body = Body::from_stream(resp.bytes_stream());
-
-    (status, resp_headers, body).into_response()
 }
