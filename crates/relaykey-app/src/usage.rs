@@ -15,6 +15,7 @@ pub enum BlockedReason {
     InvalidCredentialHeaderName, 
     InvalidCredentialHeaderValue,
     UpstreamRequestFailed, 
+    EndpointNotAllowed,
 }
 
 impl BlockedReason {
@@ -32,6 +33,7 @@ impl BlockedReason {
             BlockedReason::InvalidCredentialHeaderName => "invalid_credential_header_name",
             BlockedReason::InvalidCredentialHeaderValue => "invalid_credential_header_value",
             BlockedReason::UpstreamRequestFailed => "upstream_request_failed",
+            BlockedReason::EndpointNotAllowed => "endpoint_not_allowed",
         }
     }
 }
