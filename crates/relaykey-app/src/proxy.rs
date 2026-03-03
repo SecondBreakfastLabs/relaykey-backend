@@ -124,6 +124,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
+                vk.customer_id, 
                 &partner,
                 uri.path(),
                 false,
@@ -139,6 +140,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
+                vk.customer_id, 
                 &partner,
                 uri.path(),
                 false,
@@ -159,6 +161,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
+                vk.customer_id, 
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -178,6 +181,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
+                vk.customer_id, 
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -198,6 +202,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
+                vk.customer_id, 
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -221,6 +226,7 @@ pub async fn handler(
         let _ = insert_usage_event(
             &state.db,
             vk.id,
+            vk.customer_id, 
             &partner_row.name,
             uri.path(),
             false,
@@ -246,6 +252,7 @@ pub async fn handler(
         let _ = insert_usage_event(
             &state.db,
             vk.id,
+            vk.customer_id, 
             &partner_row.name,
             uri.path(),
             false,
@@ -265,6 +272,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
+                vk.customer_id, 
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -286,6 +294,7 @@ pub async fn handler(
         let _ = insert_usage_event(
             &state.db,
             vk.id,
+            vk.customer_id, 
             &partner_row.name,
             uri.path(),
             false,
@@ -461,6 +470,7 @@ pub async fn handler(
                 let _ = insert_usage_event(
                     &state.db,
                     vk.id,
+                    vk.customer_id, 
                     &partner_row.name,
                     uri.path(),
                     true,

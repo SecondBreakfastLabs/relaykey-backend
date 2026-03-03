@@ -76,6 +76,7 @@ pub async fn enforce_limits(
                 let _ = insert_usage_event(
                     &state.db,
                     vk.id,
+                    vk.customer_id, 
                     &partner_name,
                     &path,
                     false,
@@ -118,6 +119,7 @@ pub async fn enforce_limits(
                 let _ = insert_usage_event(
                     &state.db,
                     vk.id,
+                    vk.customer_id, 
                     &partner_name,
                     &path,
                     false,
