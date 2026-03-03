@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            name,\n            environment,  \n            tags, \n            enabled,\n            rps_limit,\n            rps_burst,\n            monthly_quota,\n            key_hash,\n            policy_id,  \n            created_at \n        FROM virtual_keys\n        WHERE key_hash = $1\n        ",
+  "query": "\n        SELECT\n        id,\n        name,\n        environment,\n        tags,\n        customer_id, \n        key_hash, \n        enabled,\n        rps_limit,\n        rps_burst,\n        monthly_quota,\n        policy_id, \n        created_at\n        FROM virtual_keys\n        ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -25,44 +25,47 @@
       },
       {
         "ordinal": 4,
-        "name": "enabled",
-        "type_info": "Bool"
+        "name": "customer_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 5,
-        "name": "rps_limit",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 6,
-        "name": "rps_burst",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 7,
-        "name": "monthly_quota",
-        "type_info": "Int4"
-      },
-      {
-        "ordinal": 8,
         "name": "key_hash",
         "type_info": "Text"
       },
       {
+        "ordinal": 6,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "rps_limit",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "rps_burst",
+        "type_info": "Int4"
+      },
+      {
         "ordinal": 9,
+        "name": "monthly_quota",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
         "name": "policy_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": [
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
       false,
@@ -70,13 +73,14 @@
       false,
       false,
       false,
-      true,
-      true,
-      true,
       false,
+      false,
+      true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "63eae90347ccb9b1220432524274e5d56e784fd60c407a6361934ec9bb80921d"
+  "hash": "caaf2f09d3406d96d78cf15b5aa52ebf2a5973741326960d22cbf4e8aa330db5"
 }

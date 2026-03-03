@@ -26,6 +26,7 @@ pub struct VirtualKeyCtx {
   pub monthly_quota: Option<i32>,
   pub policy_id: Uuid,
   pub policy: PolicyRow,
+  pub customer_id: Uuid,
 }
 
 pub async fn require_virtual_key(
@@ -79,6 +80,7 @@ pub async fn require_virtual_key(
   req.extensions_mut().insert(VirtualKeyCtx {
       id: vk.id,
       name: vk.name,
+      customer_id: vk.customer_id,
       environment: vk.environment,
       tags: vk.tags,
       rps_limit: policy.rps_limit,

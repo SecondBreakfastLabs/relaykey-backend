@@ -7,6 +7,7 @@ pub async fn insert_virtual_key(
     name: &str,
     environment: &str,
     tags: &[String],
+    customer_id: Uuid, 
     policy_id: Uuid,
     key_hash: &str,
     enabled: bool,
@@ -18,13 +19,14 @@ pub async fn insert_virtual_key(
     let rec = sqlx::query!(
         r#"
         INSERT INTO virtual_keys
-        (name, environment, tags, policy_id, key_hash, enabled, rps_limit, rps_burst, monthly_quota)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        (name, environment, tags, customer_id, policy_id, key_hash, enabled, rps_limit, rps_burst, monthly_quota)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         RETURNING id
         "#,
         name,
         environment,
         tags,
+        customer_id, 
         policy_id, 
         key_hash,
         enabled,
@@ -50,6 +52,7 @@ pub async fn list_virtual_keys(
         name,
         environment,
         tags,
+        customer_id, 
         key_hash, 
         enabled,
         rps_limit,

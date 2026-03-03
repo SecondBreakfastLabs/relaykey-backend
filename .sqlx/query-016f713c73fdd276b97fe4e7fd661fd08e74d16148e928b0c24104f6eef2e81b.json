@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n        id,\n        name,\n        environment,\n        tags,\n        key_hash, \n        enabled,\n        rps_limit,\n        rps_burst,\n        monthly_quota,\n        policy_id, \n        created_at\n        FROM virtual_keys\n        ORDER BY created_at DESC\n        ",
+  "query": "\n        SELECT \n            id,\n            name,\n            environment,  \n            tags, \n            customer_id, \n            enabled,\n            rps_limit,\n            rps_burst,\n            monthly_quota,\n            key_hash,\n            policy_id,  \n            created_at \n        FROM virtual_keys\n        WHERE key_hash = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -25,8 +25,8 @@
       },
       {
         "ordinal": 4,
-        "name": "key_hash",
-        "type_info": "Text"
+        "name": "customer_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 5,
@@ -50,17 +50,24 @@
       },
       {
         "ordinal": 9,
+        "name": "key_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
         "name": "policy_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text"
+      ]
     },
     "nullable": [
       false,
@@ -73,8 +80,9 @@
       true,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "61a328838832b4bccb87d21750ab4584218f1ce0bebbab88294cdb5f9b23a7d6"
+  "hash": "016f713c73fdd276b97fe4e7fd661fd08e74d16148e928b0c24104f6eef2e81b"
 }

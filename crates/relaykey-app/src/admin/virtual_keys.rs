@@ -19,9 +19,8 @@ pub struct CreateVirtualKeyRequest {
     pub environment: String,
     #[serde(default)]
     pub tags: Vec<String>,
-
-    // Phase 4: required - keys must point at a policy
     pub policy_id: Uuid,
+    pub customer_id: Uuid, 
 }
 
 #[derive(Serialize)]
@@ -56,6 +55,7 @@ pub async fn create_virtual_key(
         &body.name,
         &body.environment,
         &body.tags,
+        body.customer_id, 
         body.policy_id,
         &key_hash,
         true,

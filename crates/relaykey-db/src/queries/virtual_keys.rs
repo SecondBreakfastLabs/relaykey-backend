@@ -8,12 +8,13 @@ pub struct VirtualKeyRow {
     pub name: String,
     pub environment: String, 
     pub tags: Vec<String>, 
+    pub customer_id: Uuid,
     pub enabled: bool,
     pub rps_limit: Option<i32>,
     pub rps_burst: Option<i32>,
     pub monthly_quota: Option<i32>,
     pub key_hash: String, 
-    pub policy_id: Uuid,
+    pub policy_id: Uuid, 
     pub created_at: chrono::DateTime<chrono::Utc>, 
 }
 
@@ -42,6 +43,7 @@ pub async fn get_virtual_key_by_hash(
             name,
             environment,  
             tags, 
+            customer_id, 
             enabled,
             rps_limit,
             rps_burst,
