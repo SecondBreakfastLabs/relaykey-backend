@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n          day,\n          customer_id,\n          virtual_key_id,\n          partner_name,\n          error_bucket,\n          count\n        FROM error_rollup_daily\n        WHERE day >= $1\n          AND day < $2\n          AND ($3::uuid IS NULL OR customer_id = $3)\n          AND ($4::uuid IS NULL OR virtual_key_id = $4)\n          AND ($5::text IS NULL OR partner_name = $5)\n        ORDER BY day DESC, count DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "day",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "virtual_key_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "partner_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "error_bucket",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f54a67fce9b35b4c0077a15f6e519d270efdba3c2dc5735091e969099bbdcb07"
+}

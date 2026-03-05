@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO error_rollup_daily (\n          day,\n          customer_id,\n          virtual_key_id,\n          partner_name,\n          error_bucket,\n          count\n        )\n        SELECT\n          date_trunc('day', ue.ts)::date AS day,\n          vk.customer_id AS customer_id,\n          ue.virtual_key_id AS virtual_key_id,\n          ue.partner_name AS partner_name,\n\n          CASE\n            WHEN ue.blocked_reason IS NOT NULL THEN 'blocked:' || ue.blocked_reason\n            WHEN ue.status_code = 504 THEN 'upstream_timeout'\n            WHEN ue.status_code = 502 THEN 'upstream_bad_gateway'\n            WHEN ue.status_code BETWEEN 500 AND 599 THEN 'upstream_5xx'\n            WHEN ue.status_code BETWEEN 400 AND 499 THEN 'upstream_4xx'\n            ELSE 'other'\n          END AS error_bucket,\n\n          count(*)::bigint AS count\n        FROM usage_events ue\n        JOIN virtual_keys vk ON vk.id = ue.virtual_key_id\n        WHERE ue.ts >= $1 AND ue.ts < $2\n          AND (\n            ue.blocked_reason IS NOT NULL OR\n            ue.status_code IS NULL OR\n            ue.status_code >= 400\n          )\n        GROUP BY 1,2,3,4,5\n        ON CONFLICT (day, customer_id, virtual_key_id, partner_name, error_bucket)\n        DO UPDATE SET\n          count = EXCLUDED.count\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9625d18955e19e6aecc5bd85be7fd2bff97960ddac74217a5e09e814d1b92977"
+}
