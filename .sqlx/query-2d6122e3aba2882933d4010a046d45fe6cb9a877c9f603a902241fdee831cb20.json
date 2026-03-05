@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n          day,\n          customer_id,\n          virtual_key_id,\n          partner_name,\n          total_requests,\n          forwarded_requests,\n          blocked_requests,\n          avg_latency_ms,\n          status_2xx,\n          status_3xx,\n          status_4xx,\n          status_5xx\n        FROM usage_rollup_daily\n        WHERE day >= $1\n          AND day < $2\n          AND ($3::uuid IS NULL OR customer_id = $3)\n          AND ($4::uuid IS NULL OR virtual_key_id = $4)\n          AND ($5::text IS NULL OR partner_name = $5)\n        ORDER BY day DESC, partner_name ASC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "day",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "virtual_key_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "partner_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_requests",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "forwarded_requests",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "blocked_requests",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "avg_latency_ms",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 8,
+        "name": "status_2xx",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "status_3xx",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "status_4xx",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "status_5xx",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2d6122e3aba2882933d4010a046d45fe6cb9a877c9f603a902241fdee831cb20"
+}

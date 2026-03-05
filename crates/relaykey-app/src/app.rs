@@ -7,7 +7,7 @@ use axum::{
 
 use crate::{
     auth::{require_admin, require_virtual_key},
-    admin::virtual_keys,
+    admin::{virtual_keys, usage, errors},
     health,
     limits::middleware::enforce_limits,
     metrics,
@@ -34,6 +34,8 @@ pub fn build_router() -> Router<()> {
             post(virtual_keys::create_virtual_key)
                 .get(virtual_keys::list_virtual_keys_handler),
         )
+        .route("/admin/usage", get(usage::admin_usage))
+        .route("/admin/errors", get(errors::admin_errors))
         .route_layer(middleware::from_fn(require_admin));
 
     public
