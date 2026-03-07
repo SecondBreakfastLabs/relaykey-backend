@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE payment_intents \n        SET status = 'verified', \n            payment_id = COALESCE($2, payment_id),\n            payment_token = COALESCE($3, payment_token)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4d9c28f9d2855763d67cde9c90ec42e7c4becd7f1983e1f6ef6fc44f0bf30d49"
+}

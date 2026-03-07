@@ -4,6 +4,7 @@ use axum::{
     routing::{any, get, post},
     Router,
 };
+use std::sync::Arc; 
 
 use crate::{
     auth::{require_admin, require_virtual_key},
@@ -13,10 +14,15 @@ use crate::{
     metrics,
     proxy,
     policies::allowlist::enforce_allowlist,
+    x402::{
+        noop::NoopProvider, 
+        provider::PaymentProvider
+    }
 };
 
-
 pub fn build_router() -> Router<()> {
+    let x402_provider: Arc<dyn PaymentProvider> = Arc::new(NoopProvider::default()); 
+
     let public = Router::new()
         .route("/health", get(health::health))
         .route("/ready", get(health::ready))
@@ -24,6 +30,7 @@ pub fn build_router() -> Router<()> {
 
     let protected = Router::new()
         .route("/proxy/:partner/*tail", any(proxy::handler))
+        .route_layer(middleware::from_fn(crate::x402::middleware::enforce_x402))
         .route_layer(middleware::from_fn(enforce_limits))
         .route_layer(middleware::from_fn(enforce_allowlist))
         .route_layer(middleware::from_fn(require_virtual_key));
@@ -41,5 +48,6 @@ pub fn build_router() -> Router<()> {
     public
         .merge(protected)
         .merge(admin) 
+        .layer(axum::Extension(x402_provider))
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
 }

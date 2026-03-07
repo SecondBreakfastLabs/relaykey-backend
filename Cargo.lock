@@ -1527,6 +1527,7 @@ name = "relaykey-app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "base64",
  "bytes",
@@ -1540,6 +1541,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "time",
  "tokio",
