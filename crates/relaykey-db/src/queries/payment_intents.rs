@@ -7,30 +7,34 @@ pub struct PaymentIntentRow {
 }
 
 pub async fn insert_payment_intent(
-    db: &PgPool, 
-    virtual_key_id: Uuid, 
-    partner_name: &str, 
-    path: &str, 
-    request_hash: &str, 
-    amount: &str, 
-    currency: &str, 
-    facilitator: &str, 
-    recipient: &str, 
-    provider: &str, 
+    db: &PgPool,
+    virtual_key_id: Uuid,
+    partner_name: &str,
+    path: &str,
+    request_hash: &str,
+    amount: &str,
+    currency: &str,
+    facilitator_url: &str,
+    recipient: &str,
+    provider: &str,
 ) -> Result<Uuid, sqlx::Error> {
     let rec = sqlx::query!(
         r#"
         INSERT INTO payment_intents (
-            virtual_key_id, 
-            partner_name, 
-            path, 
-            request_hash, 
-            amount, 
-            currency, 
-            facilitator_url, 
-            recipient, 
-            provider
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            virtual_key_id,
+            partner_name,
+            path,
+            request_hash,
+            amount,
+            currency,
+            facilitator_url,
+            recipient,
+            provider,
+            status
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending'
+        )
         RETURNING id
         "#,
         virtual_key_id,
@@ -39,9 +43,9 @@ pub async fn insert_payment_intent(
         request_hash,
         amount,
         currency,
-        facilitator,
+        facilitator_url,
         recipient,
-        provider
+        provider,
     )
     .fetch_one(db)
     .await?;

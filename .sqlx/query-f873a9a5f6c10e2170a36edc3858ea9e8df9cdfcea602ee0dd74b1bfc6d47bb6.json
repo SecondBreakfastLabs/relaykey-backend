@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO payment_intents (\n            virtual_key_id,\n            partner_name,\n            path,\n            request_hash,\n            amount,\n            currency,\n            facilitator_url,\n            recipient,\n            provider,\n            status\n        )\n        VALUES (\n            $1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending'\n        )\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f873a9a5f6c10e2170a36edc3858ea9e8df9cdfcea602ee0dd74b1bfc6d47bb6"
+}
