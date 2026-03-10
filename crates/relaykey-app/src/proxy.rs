@@ -66,7 +66,8 @@ fn match_one(pattern: &str, path: &str) -> bool {
 
     // Handle common "/prefix/*"
     if let Some(prefix) = pattern.strip_suffix("/*") {
-        return path.starts_with(prefix) && (path.len() == prefix.len() || path.as_bytes()[prefix.len()] == b'/');
+        return path.starts_with(prefix)
+            && (path.len() == prefix.len() || path.as_bytes()[prefix.len()] == b'/');
     }
 
     // Very simple wildcard: split on '*' and require pieces in order
@@ -124,7 +125,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
-                vk.customer_id, 
+                vk.customer_id,
                 &partner,
                 uri.path(),
                 false,
@@ -140,7 +141,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
-                vk.customer_id, 
+                vk.customer_id,
                 &partner,
                 uri.path(),
                 false,
@@ -161,7 +162,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
-                vk.customer_id, 
+                vk.customer_id,
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -181,7 +182,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
-                vk.customer_id, 
+                vk.customer_id,
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -202,7 +203,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
-                vk.customer_id, 
+                vk.customer_id,
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -226,7 +227,7 @@ pub async fn handler(
         let _ = insert_usage_event(
             &state.db,
             vk.id,
-            vk.customer_id, 
+            vk.customer_id,
             &partner_row.name,
             uri.path(),
             false,
@@ -252,7 +253,7 @@ pub async fn handler(
         let _ = insert_usage_event(
             &state.db,
             vk.id,
-            vk.customer_id, 
+            vk.customer_id,
             &partner_row.name,
             uri.path(),
             false,
@@ -272,7 +273,7 @@ pub async fn handler(
             let _ = insert_usage_event(
                 &state.db,
                 vk.id,
-                vk.customer_id, 
+                vk.customer_id,
                 &partner_row.name,
                 uri.path(),
                 false,
@@ -294,7 +295,7 @@ pub async fn handler(
         let _ = insert_usage_event(
             &state.db,
             vk.id,
-            vk.customer_id, 
+            vk.customer_id,
             &partner_row.name,
             uri.path(),
             false,
@@ -470,7 +471,7 @@ pub async fn handler(
                 let _ = insert_usage_event(
                     &state.db,
                     vk.id,
-                    vk.customer_id, 
+                    vk.customer_id,
                     &partner_row.name,
                     uri.path(),
                     true,

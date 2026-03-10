@@ -13,8 +13,8 @@ use crate::state::AppState;
 use crate::x402::config::resolve_x402_config;
 
 use relaykey_db::queries::payment_intents::{
-    insert_payment_intent,
-    mark_payment_intent_verified,
+    expire_stale_payment_intents, find_latest_pending_intent_by_request_hash,
+    insert_payment_intent, mark_payment_intent_failed, mark_payment_intent_verified,
 };
 
 use super::{
@@ -75,71 +75,28 @@ pub async fn enforce_x402(
 ) -> Response {
     let partner_name = parse_partner_from_path(req.uri().path());
 
-    // Phase 8.x scoped enablement:
-    // If config resolution returns None, x402 is disabled for this request.
-    let Some(cfg) = resolve_x402_config(
-        vk.customer_id,
-        vk.id,
-        &partner_name,
-        req.uri().path(),
-    ) else {
+    // Scoped enablement: if no config, x402 is disabled for this request.
+    let Some(cfg) = resolve_x402_config(vk.customer_id, vk.id, &partner_name, req.uri().path())
+    else {
         return next.run(req).await;
     };
 
-    let (payment_id, payment_token) = extract_payment_headers(&req);
-
-    // If payment proof was supplied, verify it via the provider hook.
-    if payment_id.is_some() || payment_token.is_some() {
-        let input = VerifyInput {
-            payment_id: payment_id.as_deref(),
-            payment_token: payment_token.as_deref(),
-            amount: &cfg.amount,
-            currency: &cfg.currency,
-            recipient: &cfg.recipient,
-            facilitator_url: &cfg.facilitator_url,
-        };
-
-        match provider.verify(input).await {
-            Ok(out) if out.verified => {
-                // TODO(x402): once we correlate proof -> intent more directly,
-                // mark the matching intent verified here instead of just passing through.
-                //
-                // Example future flow:
-                // - lookup latest pending intent by (vk.id, request_hash) or payment_id
-                // - call mark_payment_intent_verified(...)
-                let _ = mark_payment_intent_verified; // keep compiler happy during iteration
-                return next.run(req).await;
-            }
-            Ok(out) => {
-                tracing::warn!(
-                    vk_id = %vk.id,
-                    customer_id = %vk.customer_id,
-                    partner = %partner_name,
-                    reason = ?out.reason,
-                    "x402 payment proof not verified"
-                );
-                return (StatusCode::PAYMENT_REQUIRED, "payment not verified").into_response();
-            }
-            Err(e) => {
-                tracing::error!(
-                    error = %e,
-                    vk_id = %vk.id,
-                    customer_id = %vk.customer_id,
-                    partner = %partner_name,
-                    "x402 verify hook failed"
-                );
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "x402 verify failed",
-                )
-                    .into_response();
-            }
-        }
+    // Expire stale pending intents opportunistically.
+    if let Err(e) = expire_stale_payment_intents(&state.db).await {
+        tracing::warn!(
+            error = %e,
+            vk_id = %vk.id,
+            customer_id = %vk.customer_id,
+            "failed to expire stale payment intents"
+        );
     }
 
-    // No payment proof -> create a payment intent and return 402 instructions.
-    // Since this middleware runs on proxy routes and body size is globally capped,
-    // buffering for request hashing is acceptable here.
+    let (payment_id, payment_token) = extract_payment_headers(&req);
+
+    // Buffer body ONCE so we can:
+    // - compute request_hash
+    // - look up matching pending intent
+    // - rebuild request for upstream if verified
     let (parts, body) = req.into_parts();
 
     let body_bytes = match axum::body::to_bytes(body, usize::MAX).await {
@@ -168,6 +125,136 @@ pub async fn enforce_x402(
 
     let request_hash = compute_request_hash(&parts.method, path_and_query, &body_bytes);
 
+    // If payment proof was supplied, verify it and reconcile the matching pending intent.
+    if payment_id.is_some() || payment_token.is_some() {
+        let pending_intent = match find_latest_pending_intent_by_request_hash(
+            &state.db,
+            vk.id,
+            &partner_name,
+            parts.uri.path(),
+            &request_hash,
+        )
+        .await
+        {
+            Ok(intent) => intent,
+            Err(e) => {
+                tracing::error!(
+                    error = %e,
+                    vk_id = %vk.id,
+                    customer_id = %vk.customer_id,
+                    partner = %partner_name,
+                    "failed to lookup pending payment intent"
+                );
+                return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
+            }
+        };
+
+        let input = VerifyInput {
+            payment_id: payment_id.as_deref(),
+            payment_token: payment_token.as_deref(),
+            amount: &cfg.amount,
+            currency: &cfg.currency,
+            recipient: &cfg.recipient,
+            facilitator_url: &cfg.facilitator_url,
+        };
+
+        match provider.verify(input).await {
+            Ok(out) if out.verified => {
+                if let Some(intent) = pending_intent {
+                    if let Err(e) = mark_payment_intent_verified(
+                        &state.db,
+                        intent.id,
+                        payment_id.as_deref(),
+                        payment_token.as_deref(),
+                    )
+                    .await
+                    {
+                        tracing::error!(
+                            error = %e,
+                            intent_id = %intent.id,
+                            vk_id = %vk.id,
+                            customer_id = %vk.customer_id,
+                            partner = %partner_name,
+                            "failed to mark payment intent verified"
+                        );
+                        return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
+                    }
+
+                    tracing::info!(
+                        intent_id = %intent.id,
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        "x402 payment intent verified"
+                    );
+                } else {
+                    tracing::warn!(
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        "payment verified but no matching pending intent found"
+                    );
+                }
+
+                // Rebuild request and continue upstream.
+                let req = Request::from_parts(parts, Body::from(body_bytes));
+                return next.run(req).await;
+            }
+            Ok(out) => {
+                if let Some(intent) = pending_intent {
+                    if let Err(e) = mark_payment_intent_failed(
+                        &state.db,
+                        intent.id,
+                        payment_id.as_deref(),
+                        payment_token.as_deref(),
+                    )
+                    .await
+                    {
+                        tracing::error!(
+                            error = %e,
+                            intent_id = %intent.id,
+                            vk_id = %vk.id,
+                            customer_id = %vk.customer_id,
+                            partner = %partner_name,
+                            "failed to mark payment intent failed"
+                        );
+                        return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
+                    }
+
+                    tracing::warn!(
+                        intent_id = %intent.id,
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        reason = ?out.reason,
+                        "x402 payment proof not verified; intent marked failed"
+                    );
+                } else {
+                    tracing::warn!(
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        reason = ?out.reason,
+                        "x402 payment proof not verified; no matching pending intent found"
+                    );
+                }
+
+                return (StatusCode::PAYMENT_REQUIRED, "payment not verified").into_response();
+            }
+            Err(e) => {
+                tracing::error!(
+                    error = %e,
+                    vk_id = %vk.id,
+                    customer_id = %vk.customer_id,
+                    partner = %partner_name,
+                    "x402 verify hook failed"
+                );
+                return (StatusCode::INTERNAL_SERVER_ERROR, "x402 verify failed").into_response();
+            }
+        }
+    }
+
+    // No payment proof -> create a pending payment intent and return 402 instructions.
     let intent_id = match insert_payment_intent(
         &state.db,
         vk.id,
@@ -225,8 +312,11 @@ pub async fn enforce_x402(
     );
     headers.insert("x-payment-provider", cfg.provider.parse().unwrap());
 
-    // Optional/debug-friendly header so callers can correlate the challenge
-    headers.insert("x-payment-intent-id", intent_id.to_string().parse().unwrap());
+    // Optional/debug-friendly header so callers can correlate the challenge.
+    headers.insert(
+        "x-payment-intent-id",
+        intent_id.to_string().parse().unwrap(),
+    );
 
     resp
 }

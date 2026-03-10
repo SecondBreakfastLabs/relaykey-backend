@@ -1,4 +1,4 @@
-use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse, Extension, Json};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 use relaykey_db::queries::{
-    metrics::{ErrorRollupRow, query_error_rollup},
-    x402_metrics::{X402ErrorDailyRow, query_x402_error_rollup},
+    metrics::{query_error_rollup, ErrorRollupRow},
+    x402_metrics::{query_x402_error_rollup, X402ErrorDailyRow},
 };
 
 #[derive(Deserialize)]
@@ -30,7 +30,6 @@ pub struct ErrorRollupJson {
 
     // lets the UI / caller distinguish core gateway errors vs x402 errors
     pub source: String,
-
     // TODO(x402): later add richer classification if needed
     // pub x402_error_class: Option<String>,
 }
@@ -46,7 +45,10 @@ pub async fn admin_errors(
     let from_day = match parse_day(&q.from) {
         Ok(d) => d,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "invalid from (expected YYYY-MM-DD)")
+            return (
+                StatusCode::BAD_REQUEST,
+                "invalid from (expected YYYY-MM-DD)",
+            )
                 .into_response();
         }
     };
@@ -54,8 +56,7 @@ pub async fn admin_errors(
     let to_day = match parse_day(&q.to) {
         Ok(d) => d,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "invalid to (expected YYYY-MM-DD)")
-                .into_response();
+            return (StatusCode::BAD_REQUEST, "invalid to (expected YYYY-MM-DD)").into_response();
         }
     };
 

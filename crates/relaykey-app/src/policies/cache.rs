@@ -3,8 +3,7 @@ use redis::AsyncCommands;
 use uuid::Uuid;
 
 use crate::state::AppState;
-use relaykey_db::queries::policies::{PolicyRow, get_policy_by_id};
-
+use relaykey_db::queries::policies::{get_policy_by_id, PolicyRow};
 
 const POLICY_CACHE_PREFIX: &str = "rk:policy:";
 const POLICY_CACHE_TTL_SECS: usize = 300; // 5 min; tweak as you like
@@ -26,10 +25,7 @@ pub async fn load_policy_bundle(state: &AppState, policy_id: Uuid) -> Result<Opt
 
     // 1) Redis lookup (best-effort; fall back to DB on any redis error)
     if let Ok(mut conn) = state.redis.get_multiplexed_async_connection().await {
-        let cached: Option<String> = conn
-            .get(&key)
-            .await
-            .unwrap_or(None);
+        let cached: Option<String> = conn.get(&key).await.unwrap_or(None);
 
         if let Some(json) = cached {
             match serde_json::from_str::<PolicyRow>(&json) {

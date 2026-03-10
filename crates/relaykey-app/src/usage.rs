@@ -9,12 +9,12 @@ pub enum BlockedReason {
     DbError,
     SsrfBlocked,
     InvalidUpstreamResponse,
-    MissingUpstreamCredential, 
+    MissingUpstreamCredential,
     InvalidPartnerBaseUrl,
-    InvalidUpstreamPath, 
-    InvalidCredentialHeaderName, 
+    InvalidUpstreamPath,
+    InvalidCredentialHeaderName,
     InvalidCredentialHeaderValue,
-    UpstreamRequestFailed, 
+    UpstreamRequestFailed,
     EndpointNotAllowed,
 }
 
@@ -41,7 +41,7 @@ impl BlockedReason {
 pub async fn insert_usage_event(
     db: &PgPool,
     virtual_key_id: Uuid,
-    customer_id: Uuid, 
+    customer_id: Uuid,
     partner_name: &str,
     path: &str,
     forwarded: bool,
@@ -67,7 +67,7 @@ pub async fn insert_usage_event(
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         "#,
         virtual_key_id,
-        customer_id, 
+        customer_id,
         partner_name,
         path,
         forwarded,
