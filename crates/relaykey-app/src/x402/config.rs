@@ -1,13 +1,13 @@
-use uuid::Uuid; 
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct X402Config {
-    pub enabled: bool, 
-    pub amount: String, 
-    pub currency: String, 
-    pub facilitator_url: String, 
+    pub enabled: bool,
+    pub amount: String,
+    pub currency: String,
+    pub facilitator_url: String,
     pub recipient: String,
-    pub provider: String, 
+    pub provider: String,
 }
 
 fn env_bool(name: &str) -> bool {
@@ -17,14 +17,14 @@ fn env_bool(name: &str) -> bool {
         .unwrap_or(false)
 }
 
-// Phase 8 Skeleton: 
-// Later this will resolve in the following order: 
-// 1. virtual key override 
-// 2. customer/org override 
-// 3. partner override 
-// 4. global default 
-// 
-// For now it returns a global default if enabled 
+// Phase 8 Skeleton:
+// Later this will resolve in the following order:
+// 1. virtual key override
+// 2. customer/org override
+// 3. partner override
+// 4. global default
+//
+// For now it returns a global default if enabled
 pub fn resolve_x402_config(
     _customer_id: Uuid,
     _virtual_key_id: Uuid,

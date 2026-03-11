@@ -1,8 +1,7 @@
 use axum::{
-    Extension,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -20,7 +19,7 @@ pub struct CreateVirtualKeyRequest {
     #[serde(default)]
     pub tags: Vec<String>,
     pub policy_id: Uuid,
-    pub customer_id: Uuid, 
+    pub customer_id: Uuid,
 }
 
 #[derive(Serialize)]
@@ -55,7 +54,7 @@ pub async fn create_virtual_key(
         &body.name,
         &body.environment,
         &body.tags,
-        body.customer_id, 
+        body.customer_id,
         body.policy_id,
         &key_hash,
         true,
@@ -72,12 +71,14 @@ pub async fn create_virtual_key(
         }
     };
 
-    (StatusCode::CREATED, Json(CreateVirtualKeyResponse { id, key: raw_key })).into_response()
+    (
+        StatusCode::CREATED,
+        Json(CreateVirtualKeyResponse { id, key: raw_key }),
+    )
+        .into_response()
 }
 
-pub async fn list_virtual_keys_handler(
-    Extension(state): Extension<Arc<AppState>>,
-) -> Response {
+pub async fn list_virtual_keys_handler(Extension(state): Extension<Arc<AppState>>) -> Response {
     match list_virtual_keys(&state.db).await {
         Ok(keys) => {
             let out: Vec<VirtualKeyResponse> = keys

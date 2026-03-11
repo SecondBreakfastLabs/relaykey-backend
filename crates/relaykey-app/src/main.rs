@@ -8,9 +8,9 @@ use tower_http::{
     trace::TraceLayer,
 };
 
-use relaykey_db::{init_db, init_redis};
 use relaykey_app::settings::Settings;
 use relaykey_app::state::AppState;
+use relaykey_db::{init_db, init_redis};
 
 #[tokio::main]
 async fn main() -> Result<(), String> {

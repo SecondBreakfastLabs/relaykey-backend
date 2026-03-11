@@ -94,24 +94,18 @@ pub async fn allow_retry_dual_budget(
         }
     };
 
-    let vk_remaining = match take_one_with_ttl(
-        &mut conn,
-        &vk_key,
-        budgets.vk_retries_per_min,
-        ttl_secs,
-    )
-    .await
-    {
-        Ok(r) => r,
-        Err(_e) => {
-            return BudgetDecision {
-                allowed: true,
-                reason: Some("redis_error_vk_fail_open"),
-                partner_remaining: Some(partner_remaining),
-                vk_remaining: None,
-            };
-        }
-    };
+    let vk_remaining =
+        match take_one_with_ttl(&mut conn, &vk_key, budgets.vk_retries_per_min, ttl_secs).await {
+            Ok(r) => r,
+            Err(_e) => {
+                return BudgetDecision {
+                    allowed: true,
+                    reason: Some("redis_error_vk_fail_open"),
+                    partner_remaining: Some(partner_remaining),
+                    vk_remaining: None,
+                };
+            }
+        };
 
     // If either is < 0, budget exceeded (we already decremented).
     // That’s fine: this is a budget, not a limiter—exceed means no more retries.
@@ -119,7 +113,11 @@ pub async fn allow_retry_dual_budget(
 
     BudgetDecision {
         allowed,
-        reason: if allowed { None } else { Some("retry_budget_exhausted") },
+        reason: if allowed {
+            None
+        } else {
+            Some("retry_budget_exhausted")
+        },
         partner_remaining: Some(partner_remaining),
         vk_remaining: Some(vk_remaining),
     }

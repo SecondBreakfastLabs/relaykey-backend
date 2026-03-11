@@ -1,5 +1,5 @@
-use rand::{rngs::OsRng, RngCore};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use rand::{rngs::OsRng, RngCore};
 
 pub fn generate_virtual_key(environment: &str) -> String {
     let mut bytes = [0u8; 24];

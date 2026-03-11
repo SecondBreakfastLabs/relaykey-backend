@@ -22,7 +22,8 @@ async fn main() -> Result<(), String> {
     // Usage:
     // cargo run -p relaykey-app --bin rollup -- --from 2026-03-01 --to 2026-03-05
     let args: Vec<String> = std::env::args().collect();
-    let from_s = arg_value(&args, "--from").ok_or_else(|| "missing --from YYYY-MM-DD".to_string())?;
+    let from_s =
+        arg_value(&args, "--from").ok_or_else(|| "missing --from YYYY-MM-DD".to_string())?;
     let to_s = arg_value(&args, "--to").ok_or_else(|| "missing --to YYYY-MM-DD".to_string())?;
 
     let from_day = parse_day(&from_s)?;

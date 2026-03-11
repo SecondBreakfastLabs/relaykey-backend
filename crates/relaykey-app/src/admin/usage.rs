@@ -1,4 +1,4 @@
-use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
+use axum::{http::StatusCode, response::IntoResponse, Extension, Json};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 use relaykey_db::queries::{
-    metrics::{UsageRollupRow, query_usage_rollup},
+    metrics::{query_usage_rollup, UsageRollupRow},
     x402_metrics::query_payment_intents_by_day,
 };
 
@@ -41,7 +41,6 @@ pub struct UsageRollupJson {
     pub x402_intents_created: i64,
     pub x402_verified_count: i64,
     pub x402_unpaid_count: i64,
-
     // TODO(x402): later extend with:
     // pub x402_revenue_cents: i64,
     // pub x402_settlement_failed_count: i64,
@@ -58,7 +57,10 @@ pub async fn admin_usage(
     let from_day = match parse_day(&q.from) {
         Ok(d) => d,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "invalid from (expected YYYY-MM-DD)")
+            return (
+                StatusCode::BAD_REQUEST,
+                "invalid from (expected YYYY-MM-DD)",
+            )
                 .into_response();
         }
     };
@@ -66,8 +68,7 @@ pub async fn admin_usage(
     let to_day = match parse_day(&q.to) {
         Ok(d) => d,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "invalid to (expected YYYY-MM-DD)")
-                .into_response();
+            return (StatusCode::BAD_REQUEST, "invalid to (expected YYYY-MM-DD)").into_response();
         }
     };
 
