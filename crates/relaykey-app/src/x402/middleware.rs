@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 use crate::auth::VirtualKeyCtx;
 use crate::state::AppState;
-use crate::x402::config::resolve_x402_config;
+use crate::x402::{
+    config::resolve_x402_config, 
+    registry::ProviderRegistry, 
+};
 
 use relaykey_db::queries::payment_intents::{
     expire_stale_payment_intents, find_latest_pending_intent_by_request_hash,
@@ -69,7 +72,7 @@ fn parse_partner_from_path(path: &str) -> String {
 pub async fn enforce_x402(
     Extension(state): Extension<Arc<AppState>>,
     Extension(vk): Extension<VirtualKeyCtx>,
-    Extension(provider): Extension<Arc<dyn PaymentProvider>>,
+    Extension(provider_registry): Extension<Arc<ProviderRegistry>>,
     req: Request<Body>,
     next: Next,
 ) -> Response {
@@ -80,6 +83,21 @@ pub async fn enforce_x402(
     else {
         return next.run(req).await;
     };
+
+    let Some(provider) = provider_registry.get(&cfg.provider) else {
+        tracing::error!(
+            provider = %cfg.provider, 
+            vk_id = %vk.id, 
+            customer_id = %vk.customer_id, 
+            partner = %partner_name,
+            "x402 provider not registered"
+        ); 
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR, 
+            "x402 provider not configured", 
+        )
+            .into_response(); 
+    }; 
 
     // Expire stale pending intents opportunistically.
     if let Err(e) = expire_stale_payment_intents(&state.db).await {

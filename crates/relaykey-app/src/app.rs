@@ -15,13 +15,18 @@ use crate::{
     proxy,
     policies::allowlist::enforce_allowlist,
     x402::{
-        noop::NoopProvider, 
-        provider::PaymentProvider
+        noop::NoopProvider,
+        stub::StubProvider, 
+        registry::ProviderRegistry,
     }
 };
 
 pub fn build_router() -> Router<()> {
-    let x402_provider: Arc<dyn PaymentProvider> = Arc::new(NoopProvider::default()); 
+    let provider_registry = Arc::new(
+        ProviderRegistry::new()
+            .register("noop", Arc::new(NoopProvider::default()))
+            .register("stub", Arc::new(StubProvider))
+    );
 
     let public = Router::new()
         .route("/health", get(health::health))
@@ -48,6 +53,6 @@ pub fn build_router() -> Router<()> {
     public
         .merge(protected)
         .merge(admin) 
-        .layer(axum::Extension(x402_provider))
+        .layer(axum::Extension(provider_registry))
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
 }
