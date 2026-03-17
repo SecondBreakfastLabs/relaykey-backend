@@ -10,25 +10,19 @@ use std::sync::Arc;
 
 use crate::auth::VirtualKeyCtx;
 use crate::state::AppState;
-use crate::x402::{
-    config::resolve_x402_config, 
-    registry::ProviderRegistry, 
-};
+use crate::x402::{config::resolve_x402_config, registry::ProviderRegistry};
 
 use relaykey_db::queries::payment_intents::{
     expire_stale_payment_intents, find_latest_pending_intent_by_request_hash,
     insert_payment_intent, mark_payment_intent_failed, mark_payment_intent_verified,
 };
 
-use super::{
-    hash::compute_request_hash,
-    provider::{PaymentProvider, VerifyInput},
-};
+use super::{hash::compute_request_hash, provider::VerifyInput};
 
 #[derive(Serialize)]
 struct PaymentInstructions<'a> {
     #[serde(rename = "type")]
-    typ: &'a str, // "x402"
+    typ: &'a str,
     amount: &'a str,
     currency: &'a str,
     facilitator: &'a str,
@@ -84,20 +78,24 @@ pub async fn enforce_x402(
         return next.run(req).await;
     };
 
-    let Some(provider) = provider_registry.get(&cfg.provider) else {
-        tracing::error!(
-            provider = %cfg.provider, 
-            vk_id = %vk.id, 
-            customer_id = %vk.customer_id, 
-            partner = %partner_name,
-            "x402 provider not registered"
-        ); 
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR, 
-            "x402 provider not configured", 
-        )
-            .into_response(); 
-    }; 
+    let provider = match provider_registry.require(&cfg.provider) {
+        Ok(provider) => provider,
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                provider = %cfg.provider,
+                vk_id = %vk.id,
+                customer_id = %vk.customer_id,
+                partner = %partner_name,
+                "x402 provider not registered"
+            );
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "x402 provider not configured",
+            )
+                .into_response();
+        }
+    };
 
     // Expire stale pending intents opportunistically.
     if let Err(e) = expire_stale_payment_intents(&state.db).await {
@@ -111,8 +109,8 @@ pub async fn enforce_x402(
 
     let (payment_id, payment_token) = extract_payment_headers(&req);
 
-    // Buffer body ONCE so we can:
-    // - compute request_hash
+    // Buffer body once so we can:
+    // - compute request hash
     // - look up matching pending intent
     // - rebuild request for upstream if verified
     let (parts, body) = req.into_parts();
@@ -203,6 +201,7 @@ pub async fn enforce_x402(
                         vk_id = %vk.id,
                         customer_id = %vk.customer_id,
                         partner = %partner_name,
+                        provider = %cfg.provider,
                         "x402 payment intent verified"
                     );
                 } else {
@@ -210,11 +209,11 @@ pub async fn enforce_x402(
                         vk_id = %vk.id,
                         customer_id = %vk.customer_id,
                         partner = %partner_name,
+                        provider = %cfg.provider,
                         "payment verified but no matching pending intent found"
                     );
                 }
 
-                // Rebuild request and continue upstream.
                 let req = Request::from_parts(parts, Body::from(body_bytes));
                 return next.run(req).await;
             }
@@ -244,6 +243,7 @@ pub async fn enforce_x402(
                         vk_id = %vk.id,
                         customer_id = %vk.customer_id,
                         partner = %partner_name,
+                        provider = %cfg.provider,
                         reason = ?out.reason,
                         "x402 payment proof not verified; intent marked failed"
                     );
@@ -252,6 +252,7 @@ pub async fn enforce_x402(
                         vk_id = %vk.id,
                         customer_id = %vk.customer_id,
                         partner = %partner_name,
+                        provider = %cfg.provider,
                         reason = ?out.reason,
                         "x402 payment proof not verified; no matching pending intent found"
                     );
@@ -265,9 +266,14 @@ pub async fn enforce_x402(
                     vk_id = %vk.id,
                     customer_id = %vk.customer_id,
                     partner = %partner_name,
+                    provider = %cfg.provider,
                     "x402 verify hook failed"
                 );
-                return (StatusCode::INTERNAL_SERVER_ERROR, "x402 verify failed").into_response();
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "x402 verify failed",
+                )
+                    .into_response();
             }
         }
     }
@@ -294,6 +300,7 @@ pub async fn enforce_x402(
                 vk_id = %vk.id,
                 customer_id = %vk.customer_id,
                 partner = %partner_name,
+                provider = %cfg.provider,
                 "failed to insert payment intent"
             );
             return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
