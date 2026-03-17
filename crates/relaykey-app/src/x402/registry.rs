@@ -29,4 +29,9 @@ impl ProviderRegistry {
     pub fn names(&self) -> Vec<String> {
         self.providers.keys().cloned().collect()
     }
+
+    pub fn require(&self, name: &str) -> Result<Arc<dyn PaymentProvider>, String> {
+        self.get(name)
+            .ok_or_else(|| format!("provider not registered: {name}"))
+    }
 }

@@ -27,12 +27,22 @@ fn parse_override_map(env_name: &str) -> Option<HashMap<String, X402Config>> {
     serde_json::from_str(&raw).ok()
 }
 
-fn path_matches(cfg: &X402Config, path: &str) -> bool {
+/// Returns Some(length_of_matching_prefix) if the config applies to this path.
+/// Returns None if the config does not apply.
+///
+/// Rule:
+/// - empty path_prefixes => applies to all paths with score 0
+/// - otherwise choose the longest matching prefix
+fn match_score(cfg: &X402Config, path: &str) -> Option<usize> {
     if cfg.path_prefixes.is_empty() {
-        return true;
+        return Some(0);
     }
 
-    cfg.path_prefixes.iter().any(|prefix| path.starts_with(prefix))
+    cfg.path_prefixes
+        .iter()
+        .filter(|prefix| path.starts_with(prefix.as_str()))
+        .map(|prefix| prefix.len())
+        .max()
 }
 
 fn global_default() -> Option<X402Config> {
@@ -62,6 +72,13 @@ fn global_default() -> Option<X402Config> {
 /// 2. customer/org override
 /// 3. partner override
 /// 4. global default
+///
+/// Within a scope, the config only applies if:
+/// - path_prefixes is empty, OR
+/// - the request path matches at least one prefix
+///
+/// Longest matching prefix wins within that scope.
+/// If no path matches at a given scope, fall back to broader scope.
 pub fn resolve_x402_config(
     customer_id: Uuid,
     virtual_key_id: Uuid,
@@ -74,7 +91,7 @@ pub fn resolve_x402_config(
     // 1) virtual key override
     if let Some(map) = parse_override_map("X402_VIRTUAL_KEY_OVERRIDES") {
         if let Some(cfg) = map.get(&vk_key) {
-            if path_matches(cfg, path) {
+            if match_score(cfg, path).is_some() {
                 return if cfg.enabled { Some(cfg.clone()) } else { None };
             }
         }
@@ -83,7 +100,7 @@ pub fn resolve_x402_config(
     // 2) customer/org override
     if let Some(map) = parse_override_map("X402_CUSTOMER_OVERRIDES") {
         if let Some(cfg) = map.get(&customer_key) {
-            if path_matches(cfg, path) {
+            if match_score(cfg, path).is_some() {
                 return if cfg.enabled { Some(cfg.clone()) } else { None };
             }
         }
@@ -92,7 +109,7 @@ pub fn resolve_x402_config(
     // 3) partner override
     if let Some(map) = parse_override_map("X402_PARTNER_OVERRIDES") {
         if let Some(cfg) = map.get(partner_name) {
-            if path_matches(cfg, path) {
+            if match_score(cfg, path).is_some() {
                 return if cfg.enabled { Some(cfg.clone()) } else { None };
             }
         }
@@ -100,7 +117,7 @@ pub fn resolve_x402_config(
 
     // 4) global default
     global_default().and_then(|cfg| {
-        if path_matches(&cfg, path) {
+        if match_score(&cfg, path).is_some() {
             Some(cfg)
         } else {
             None
