@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO x402_error_rollup_daily (\n          day,\n          customer_id,\n          virtual_key_id,\n          partner_name,\n          provider,\n          error_bucket,\n          count\n        )\n        SELECT\n          date_trunc('day', xe.ts)::date AS day,\n          xe.customer_id,\n          xe.virtual_key_id,\n          xe.partner_name,\n          xe.provider,\n          xe.event_type AS error_bucket,\n          COUNT(*)::bigint AS count\n        FROM x402_events xe\n        WHERE xe.ts >= $1 AND xe.ts < $2\n        GROUP BY 1,2,3,4,5,6\n        ON CONFLICT (day, customer_id, virtual_key_id, partner_name, provider, error_bucket)\n        DO UPDATE SET\n          count = EXCLUDED.count\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "07912573d4b9557bc9c4f6835d34573c9f19e5b2c86200c062e0cfdd836654bd"
+}

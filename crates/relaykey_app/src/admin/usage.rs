@@ -41,9 +41,9 @@ pub struct UsageRollupJson {
     pub x402_intents_created: i64,
     pub x402_verified_count: i64,
     pub x402_unpaid_count: i64,
-    // TODO(x402): later extend with:
-    // pub x402_revenue_cents: i64,
-    // pub x402_settlement_failed_count: i64,
+    
+    pub x402_failed_count: i64,
+    pub x402_expired_count: i64,
 }
 
 fn parse_day(s: &str) -> Result<NaiveDate, ()> {
@@ -136,6 +136,8 @@ pub async fn admin_usage(
 
             let (x402_intents_created, x402_verified_count, x402_unpaid_count) =
                 x402_map.get(&key).copied().unwrap_or((0, 0, 0));
+            let x402_failed_count = 0; // Initialize with a default value
+            let x402_expired_count = 0; // Initialize with a default value
 
             UsageRollupJson {
                 day: r.day.to_string(),
@@ -153,6 +155,8 @@ pub async fn admin_usage(
                 x402_intents_created,
                 x402_verified_count,
                 x402_unpaid_count,
+                x402_failed_count, // Initialized with default value
+                x402_expired_count
             }
         })
         .collect();

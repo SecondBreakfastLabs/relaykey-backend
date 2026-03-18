@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/relaykey-app", 
+    "crates/relaykey_app", 
     "crates/relaykey-core", 
     "crates/relaykey-db",
 ]

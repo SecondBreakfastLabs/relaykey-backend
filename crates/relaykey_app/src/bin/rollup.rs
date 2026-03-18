@@ -46,6 +46,14 @@ async fn main() -> Result<(), String> {
         .await
         .map_err(|e| format!("error rollup failed: {e}"))?;
 
+        relaykey_db::queries::x402_metrics::rollup_x402_usage_daily(&db, from, to)
+        .await
+        .map_err(|e| format!("x402 usage rollup failed: {e}"))?;
+    
+    relaykey_db::queries::x402_metrics::rollup_x402_error_daily(&db, from, to)
+        .await
+        .map_err(|e| format!("x402 error rollup failed: {e}"))?;
+
     println!("rollup complete: [{} .. {})", from_day, to_day);
     Ok(())
 }

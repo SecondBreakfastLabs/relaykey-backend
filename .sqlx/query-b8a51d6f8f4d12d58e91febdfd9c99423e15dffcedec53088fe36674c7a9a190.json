@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n          day AS \"day!\",\n          customer_id AS \"customer_id!\",\n          virtual_key_id AS \"virtual_key_id!\",\n          partner_name AS \"partner_name!\",\n          provider AS \"provider!\",\n          intents_created AS \"intents_created!\",\n          verified_count AS \"verified_count!\",\n          failed_count AS \"failed_count!\",\n          expired_count AS \"expired_count!\",\n          unpaid_count AS \"unpaid_count!\",\n          revenue_cents AS \"revenue_cents!\"\n        FROM x402_rollup_daily\n        WHERE day >= $1\n          AND day < $2\n          AND ($3::uuid IS NULL OR customer_id = $3)\n          AND ($4::uuid IS NULL OR virtual_key_id = $4)\n          AND ($5::text IS NULL OR partner_name = $5)\n        ORDER BY day DESC, intents_created DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "day!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "customer_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "virtual_key_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "partner_name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "intents_created!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "verified_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "failed_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "expired_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "unpaid_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 10,
+        "name": "revenue_cents!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b8a51d6f8f4d12d58e91febdfd9c99423e15dffcedec53088fe36674c7a9a190"
+}
