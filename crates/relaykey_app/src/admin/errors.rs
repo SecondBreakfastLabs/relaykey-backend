@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, response::IntoResponse, Extension, Json};
+use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 use relaykey_db::queries::{
-    metrics::{query_error_rollup, ErrorRollupRow},
-    x402_metrics::{query_x402_error_rollup, X402ErrorDailyRow},
+    metrics::{ErrorRollupRow, query_error_rollup},
+    x402_metrics::{X402ErrorRollupRow, query_x402_error_rollup},
 };
 
 #[derive(Deserialize)]
@@ -28,9 +28,13 @@ pub struct ErrorRollupJson {
     pub error_bucket: String,
     pub count: i64,
 
-    // lets the UI / caller distinguish core gateway errors vs x402 errors
+    // "gateway" | "x402"
     pub source: String,
-    // TODO(x402): later add richer classification if needed
+
+    // provider is only meaningful for x402 rows
+    pub provider: Option<String>,
+
+    // later:
     // pub x402_error_class: Option<String>,
 }
 
@@ -56,13 +60,17 @@ pub async fn admin_errors(
     let to_day = match parse_day(&q.to) {
         Ok(d) => d,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "invalid to (expected YYYY-MM-DD)").into_response();
+            return (
+                StatusCode::BAD_REQUEST,
+                "invalid to (expected YYYY-MM-DD)",
+            )
+                .into_response();
         }
     };
 
     let partner = q.partner_name.as_deref();
 
-    let rows: Vec<ErrorRollupRow> = match query_error_rollup(
+    let gateway_rows: Vec<ErrorRollupRow> = match query_error_rollup(
         &state.db,
         from_day,
         to_day,
@@ -76,7 +84,7 @@ pub async fn admin_errors(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let x402_rows: Vec<X402ErrorDailyRow> = match query_x402_error_rollup(
+    let x402_rows: Vec<X402ErrorRollupRow> = match query_x402_error_rollup(
         &state.db,
         from_day,
         to_day,
@@ -90,7 +98,7 @@ pub async fn admin_errors(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let mut out: Vec<ErrorRollupJson> = rows
+    let mut out: Vec<ErrorRollupJson> = gateway_rows
         .into_iter()
         .map(|r| ErrorRollupJson {
             day: r.day.to_string(),
@@ -100,6 +108,7 @@ pub async fn admin_errors(
             error_bucket: r.error_bucket,
             count: r.count,
             source: "gateway".to_string(),
+            provider: None,
         })
         .collect();
 
@@ -111,6 +120,7 @@ pub async fn admin_errors(
         error_bucket: r.error_bucket,
         count: r.count,
         source: "x402".to_string(),
+        provider: Some(r.provider),
     }));
 
     Json(out).into_response()

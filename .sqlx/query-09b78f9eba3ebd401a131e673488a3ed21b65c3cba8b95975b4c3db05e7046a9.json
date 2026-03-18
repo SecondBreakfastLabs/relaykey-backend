@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO x402_events (\n          customer_id,\n          virtual_key_id,\n          partner_name,\n          provider,\n          path,\n          event_type,\n          detail\n        )\n        VALUES ($1,$2,$3,$4,$5,$6,$7)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "09b78f9eba3ebd401a131e673488a3ed21b65c3cba8b95975b4c3db05e7046a9"
+}
