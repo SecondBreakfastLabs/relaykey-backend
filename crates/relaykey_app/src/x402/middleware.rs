@@ -12,9 +12,12 @@ use crate::auth::VirtualKeyCtx;
 use crate::state::AppState;
 use crate::x402::{config::resolve_x402_config, registry::ProviderRegistry};
 
-use relaykey_db::queries::payment_intents::{
-    expire_stale_payment_intents, find_latest_pending_intent_by_request_hash,
-    insert_payment_intent, mark_payment_intent_failed, mark_payment_intent_verified,
+use relaykey_db::queries::{
+    payment_intents::{
+        expire_stale_payment_intents, find_latest_pending_intent_by_request_hash,
+        insert_payment_intent, mark_payment_intent_failed, mark_payment_intent_verified,
+    },
+    x402_metrics::insert_x402_event,
 };
 
 use super::{hash::compute_request_hash, provider::VerifyInput};
@@ -49,9 +52,8 @@ fn extract_payment_headers(req: &Request<Body>) -> (Option<String>, Option<Strin
 }
 
 fn parse_partner_from_path(path: &str) -> String {
-    // expected route shape: /proxy/{partner}/...
     let mut it = path.split('/');
-    let _ = it.next(); // ""
+    let _ = it.next();
     let p1 = it.next().unwrap_or("");
     if p1 != "proxy" {
         return "-".to_string();
@@ -71,6 +73,7 @@ pub async fn enforce_x402(
     next: Next,
 ) -> Response {
     let partner_name = parse_partner_from_path(req.uri().path());
+    let request_path = req.uri().path().to_string();
 
     // Scoped enablement: if no config, x402 is disabled for this request.
     let Some(cfg) = resolve_x402_config(vk.customer_id, vk.id, &partner_name, req.uri().path())
@@ -81,6 +84,18 @@ pub async fn enforce_x402(
     let provider = match provider_registry.require(&cfg.provider) {
         Ok(provider) => provider,
         Err(e) => {
+            let _ = insert_x402_event(
+                &state.db,
+                vk.customer_id,
+                vk.id,
+                &partner_name,
+                &cfg.provider,
+                &request_path,
+                "x402_config_missing",
+                Some("provider not registered"),
+            )
+            .await;
+
             tracing::error!(
                 error = %e,
                 provider = %cfg.provider,
@@ -237,30 +252,55 @@ pub async fn enforce_x402(
                         );
                         return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
                     }
-
-                    tracing::warn!(
-                        intent_id = %intent.id,
-                        vk_id = %vk.id,
-                        customer_id = %vk.customer_id,
-                        partner = %partner_name,
-                        provider = %cfg.provider,
-                        reason = ?out.reason,
-                        "x402 payment proof not verified; intent marked failed"
-                    );
-                } else {
-                    tracing::warn!(
-                        vk_id = %vk.id,
-                        customer_id = %vk.customer_id,
-                        partner = %partner_name,
-                        provider = %cfg.provider,
-                        reason = ?out.reason,
-                        "x402 payment proof not verified; no matching pending intent found"
-                    );
                 }
+
+                let _ = insert_x402_event(
+                    &state.db,
+                    vk.customer_id,
+                    vk.id,
+                    &partner_name,
+                    &cfg.provider,
+                    parts.uri.path(),
+                    "x402_verify_failed",
+                    out.reason.as_deref(),
+                )
+                .await;
+
+                tracing::warn!(
+                    vk_id = %vk.id,
+                    customer_id = %vk.customer_id,
+                    partner = %partner_name,
+                    provider = %cfg.provider,
+                    reason = ?out.reason,
+                    "x402 payment proof not verified"
+                );
 
                 return (StatusCode::PAYMENT_REQUIRED, "payment not verified").into_response();
             }
             Err(e) => {
+                if let Some(intent) = pending_intent {
+                    let _ = mark_payment_intent_failed(
+                        &state.db,
+                        intent.id,
+                        payment_id.as_deref(),
+                        payment_token.as_deref(),
+                    )
+                    .await;
+                }
+
+                let detail = e.to_string();
+                let _ = insert_x402_event(
+                    &state.db,
+                    vk.customer_id,
+                    vk.id,
+                    &partner_name,
+                    &cfg.provider,
+                    parts.uri.path(),
+                    "x402_provider_error",
+                    Some(&detail),
+                )
+                .await;
+
                 tracing::error!(
                     error = %e,
                     vk_id = %vk.id,
@@ -295,6 +335,19 @@ pub async fn enforce_x402(
     {
         Ok(id) => id,
         Err(e) => {
+            let detail = e.to_string();
+            let _ = insert_x402_event(
+                &state.db,
+                vk.customer_id,
+                vk.id,
+                &partner_name,
+                &cfg.provider,
+                parts.uri.path(),
+                "x402_intent_insert_failed",
+                Some(&detail),
+            )
+            .await;
+
             tracing::error!(
                 error = %e,
                 vk_id = %vk.id,
@@ -336,8 +389,6 @@ pub async fn enforce_x402(
         cfg.facilitator_url.parse().unwrap(),
     );
     headers.insert("x-payment-provider", cfg.provider.parse().unwrap());
-
-    // Optional/debug-friendly header so callers can correlate the challenge.
     headers.insert(
         "x-payment-intent-id",
         intent_id.to_string().parse().unwrap(),
