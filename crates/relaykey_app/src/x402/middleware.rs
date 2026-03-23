@@ -57,7 +57,6 @@ fn extract_payment_headers(req: &Request<Body>) -> (Option<String>, Option<Strin
 }
 
 fn parse_partner_from_path(path: &str) -> String {
-    // expected route shape: /proxy/{partner}/...
     let mut it = path.split('/');
     let _ = it.next();
     let p1 = it.next().unwrap_or("");
