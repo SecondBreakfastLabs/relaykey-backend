@@ -16,6 +16,14 @@ pub struct PaymentIntentLookupRow {
     pub status: String, 
 }
 
+#[derive(Debug, Clone)]
+pub struct VerifiedIntentReuseRow {
+    pub id: Uuid, 
+    pub request_hash: String, 
+    pub payment_id: Option<String>, 
+    pub payment_token: Option<String>, 
+}
+
 pub async fn insert_payment_intent(
     db: &PgPool,
     virtual_key_id: Uuid,
@@ -160,6 +168,52 @@ pub async fn find_latest_pending_intent_by_request_hash(
         partner_name,
         path,
         request_hash
+    )
+    .fetch_optional(db)
+    .await
+}
+
+pub async fn find_verified_intent_by_payment_id(
+    db: &PgPool,
+    payment_id: &str,
+) -> Result<Option<VerifiedIntentReuseRow>, sqlx::Error> {
+    sqlx::query_as!(
+        VerifiedIntentReuseRow,
+        r#"
+        SELECT
+            id,
+            request_hash,
+            payment_id,
+            payment_token
+        FROM payment_intents
+        WHERE payment_id = $1
+          AND status = 'verified'
+        LIMIT 1
+        "#,
+        payment_id
+    )
+    .fetch_optional(db)
+    .await
+}
+
+pub async fn find_verified_intent_by_payment_token(
+    db: &PgPool,
+    payment_token: &str,
+) -> Result<Option<VerifiedIntentReuseRow>, sqlx::Error> {
+    sqlx::query_as!(
+        VerifiedIntentReuseRow,
+        r#"
+        SELECT
+            id,
+            request_hash,
+            payment_id,
+            payment_token
+        FROM payment_intents
+        WHERE payment_token = $1
+          AND status = 'verified'
+        LIMIT 1
+        "#,
+        payment_token
     )
     .fetch_optional(db)
     .await

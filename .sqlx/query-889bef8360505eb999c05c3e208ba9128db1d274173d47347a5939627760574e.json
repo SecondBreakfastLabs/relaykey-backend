@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id,\n            request_hash,\n            payment_id,\n            payment_token\n        FROM payment_intents\n        WHERE payment_token = $1\n          AND status = 'verified'\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_hash",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "payment_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "payment_token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "889bef8360505eb999c05c3e208ba9128db1d274173d47347a5939627760574e"
+}

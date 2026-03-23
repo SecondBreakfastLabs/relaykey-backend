@@ -1,4 +1,4 @@
-use axum::{http::StatusCode, response::IntoResponse, Extension, Json};
+use axum::{Extension, Json, http::StatusCode, response::IntoResponse};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::state::AppState;
 use relaykey_db::queries::{
-    metrics::{query_usage_rollup, UsageRollupRow},
-    x402_metrics::query_payment_intents_by_day,
+    metrics::{UsageRollupRow, query_usage_rollup},
+    x402_metrics::{X402UsageRollupRow, query_x402_usage_rollup},
 };
 
 #[derive(Deserialize)]
@@ -37,13 +37,15 @@ pub struct UsageRollupJson {
     pub status_4xx: i64,
     pub status_5xx: i64,
 
-    // Phase 8.x x402 visibility
     pub x402_intents_created: i64,
     pub x402_verified_count: i64,
     pub x402_unpaid_count: i64,
-    
     pub x402_failed_count: i64,
     pub x402_expired_count: i64,
+
+    // later:
+    // pub x402_revenue_cents: i64,
+    // pub x402_conversion_rate: f64,
 }
 
 fn parse_day(s: &str) -> Result<NaiveDate, ()> {
@@ -68,7 +70,11 @@ pub async fn admin_usage(
     let to_day = match parse_day(&q.to) {
         Ok(d) => d,
         Err(_) => {
-            return (StatusCode::BAD_REQUEST, "invalid to (expected YYYY-MM-DD)").into_response();
+            return (
+                StatusCode::BAD_REQUEST,
+                "invalid to (expected YYYY-MM-DD)",
+            )
+                .into_response();
         }
     };
 
@@ -88,7 +94,7 @@ pub async fn admin_usage(
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let x402_rows = match query_payment_intents_by_day(
+    let x402_rows: Vec<X402UsageRollupRow> = match query_x402_usage_rollup(
         &state.db,
         from_day,
         to_day,
@@ -103,8 +109,9 @@ pub async fn admin_usage(
     };
 
     // key = (day, customer_id, virtual_key_id, partner_name)
-    // value = (intents_created, verified_count, unpaid_count)
-    let mut x402_map: HashMap<(String, Uuid, Uuid, String), (i64, i64, i64)> = HashMap::new();
+    // value = (intents_created, verified_count, unpaid_count, failed_count, expired_count)
+    let mut x402_map: HashMap<(String, Uuid, Uuid, String), (i64, i64, i64, i64, i64)> =
+        HashMap::new();
 
     for r in x402_rows {
         let key = (
@@ -114,14 +121,12 @@ pub async fn admin_usage(
             r.partner_name.clone(),
         );
 
-        let entry = x402_map.entry(key).or_insert((0, 0, 0));
-        entry.0 += r.count;
-
-        match r.status.as_str() {
-            "verified" => entry.1 += r.count,
-            "pending" => entry.2 += r.count,
-            _ => {}
-        }
+        let entry = x402_map.entry(key).or_insert((0, 0, 0, 0, 0));
+        entry.0 += r.intents_created;
+        entry.1 += r.verified_count;
+        entry.2 += r.unpaid_count;
+        entry.3 += r.failed_count;
+        entry.4 += r.expired_count;
     }
 
     let out: Vec<UsageRollupJson> = rows
@@ -134,10 +139,16 @@ pub async fn admin_usage(
                 r.partner_name.clone(),
             );
 
-            let (x402_intents_created, x402_verified_count, x402_unpaid_count) =
-                x402_map.get(&key).copied().unwrap_or((0, 0, 0));
-            let x402_failed_count = 0; // Initialize with a default value
-            let x402_expired_count = 0; // Initialize with a default value
+            let (
+                x402_intents_created,
+                x402_verified_count,
+                x402_unpaid_count,
+                x402_failed_count,
+                x402_expired_count,
+            ) = x402_map
+                .get(&key)
+                .copied()
+                .unwrap_or((0, 0, 0, 0, 0));
 
             UsageRollupJson {
                 day: r.day.to_string(),
@@ -155,8 +166,8 @@ pub async fn admin_usage(
                 x402_intents_created,
                 x402_verified_count,
                 x402_unpaid_count,
-                x402_failed_count, // Initialized with default value
-                x402_expired_count
+                x402_failed_count,
+                x402_expired_count,
             }
         })
         .collect();
