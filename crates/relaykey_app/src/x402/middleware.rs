@@ -14,8 +14,13 @@ use crate::x402::{config::resolve_x402_config, registry::ProviderRegistry};
 
 use relaykey_db::queries::{
     payment_intents::{
-        expire_stale_payment_intents, find_latest_pending_intent_by_request_hash,
-        insert_payment_intent, mark_payment_intent_failed, mark_payment_intent_verified,
+        expire_stale_payment_intents,
+        find_latest_pending_intent_by_request_hash,
+        find_verified_intent_by_payment_id,
+        find_verified_intent_by_payment_token,
+        insert_payment_intent,
+        mark_payment_intent_failed,
+        mark_payment_intent_verified,
     },
     x402_metrics::insert_x402_event,
 };
@@ -126,6 +131,7 @@ pub async fn enforce_x402(
 
     // Buffer body once so we can:
     // - compute request hash
+    // - run replay checks
     // - look up matching pending intent
     // - rebuild request for upstream if verified
     let (parts, body) = req.into_parts();
@@ -158,6 +164,99 @@ pub async fn enforce_x402(
 
     // If payment proof was supplied, verify it and reconcile the matching pending intent.
     if payment_id.is_some() || payment_token.is_some() {
+        // Minimum viable replay protection:
+        // if this payment proof was already used by a DIFFERENT verified request_hash,
+        // block reuse before provider.verify(...)
+        if let Some(pid) = payment_id.as_deref() {
+            match find_verified_intent_by_payment_id(&state.db, pid).await {
+                Ok(Some(existing)) if existing.request_hash != request_hash => {
+                    let _ = insert_x402_event(
+                        &state.db,
+                        vk.customer_id,
+                        vk.id,
+                        &partner_name,
+                        &cfg.provider,
+                        parts.uri.path(),
+                        "x402_replay_blocked",
+                        Some("payment_id already used for different request_hash"),
+                    )
+                    .await;
+
+                    tracing::warn!(
+                        payment_id = %pid,
+                        existing_intent_id = %existing.id,
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        "x402 replay blocked by payment_id"
+                    );
+
+                    return (
+                        StatusCode::PAYMENT_REQUIRED,
+                        "payment replay blocked",
+                    )
+                        .into_response();
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        payment_id = %pid,
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        "failed to check payment_id replay"
+                    );
+                    return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
+                }
+            }
+        }
+
+        if let Some(ptok) = payment_token.as_deref() {
+            match find_verified_intent_by_payment_token(&state.db, ptok).await {
+                Ok(Some(existing)) if existing.request_hash != request_hash => {
+                    let _ = insert_x402_event(
+                        &state.db,
+                        vk.customer_id,
+                        vk.id,
+                        &partner_name,
+                        &cfg.provider,
+                        parts.uri.path(),
+                        "x402_replay_blocked",
+                        Some("payment_token already used for different request_hash"),
+                    )
+                    .await;
+
+                    tracing::warn!(
+                        payment_token = %ptok,
+                        existing_intent_id = %existing.id,
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        "x402 replay blocked by payment_token"
+                    );
+
+                    return (
+                        StatusCode::PAYMENT_REQUIRED,
+                        "payment replay blocked",
+                    )
+                        .into_response();
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!(
+                        error = %e,
+                        payment_token = %ptok,
+                        vk_id = %vk.id,
+                        customer_id = %vk.customer_id,
+                        partner = %partner_name,
+                        "failed to check payment_token replay"
+                    );
+                    return (StatusCode::INTERNAL_SERVER_ERROR, "db error").into_response();
+                }
+            }
+        }
+
         let pending_intent = match find_latest_pending_intent_by_request_hash(
             &state.db,
             vk.id,
